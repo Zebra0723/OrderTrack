@@ -238,13 +238,18 @@
 
   function render() {
     const activeBiz = route.biz || (route.page === 'cs' || route.page === 'hack' ? route.page : null);
-    const navKey = activeBiz && ['cs', 'hack', 'new', 'order'].includes(route.page) ? activeBiz : route.page;
+    const navKey = activeBiz && ['cs', 'hack', 'new', 'order', 'edit'].includes(route.page) ? activeBiz : route.page;
     $$('.sb-item[data-nav]').forEach((b) => b.classList.toggle('active', b.dataset.nav === navKey));
     main.dataset.biz = activeBiz || 'cs';
     $('#mbTitle').textContent = activeBiz && route.page !== 'customers' ? bizName(activeBiz) : (PAGE_TITLES[route.page] || 'OrderTrack');
     switch (route.page) {
       case 'cs': case 'hack': return renderList(route.page);
       case 'new': return route.biz === 'cs' ? renderCsForm() : renderHackForm();
+      case 'edit': {
+        const ed = DB.orders.find((x) => x.id === route.id);
+        if (!ed) return go('cs');
+        return ed.business === 'cs' ? renderCsForm(ed) : renderHackForm(ed);
+      }
       case 'order': return renderOrder();
       case 'customers': return renderCustomers();
       case 'settings': return renderSettings();
@@ -333,23 +338,24 @@
     return `<div class="fsec"><div class="fsec-head"><span class="n">${n}</span><div><h3>${title}</h3>${desc ? `<p>${desc}</p>` : ''}</div></div>${body}</div>`;
   }
 
-  function customerSection(n) {
+  function customerSection(n, ed) {
     const known = OT.customers(DB.orders);
+    const v = (k) => (ed ? ` value="${esc(ed[k] || '')}"` : '');
     return section(n, 'Customer', 'Enter an email, a phone number, or both. Start typing to reuse an existing customer.', `<div class="grid">
-      ${field('f_name', 'Name', `<input type="text" id="f_name" list="dl_names" autocomplete="off" placeholder="Full name">`, null, 'full')}
-      ${field('f_email', 'Email', `<input type="email" id="f_email" list="dl_emails" autocomplete="off" placeholder="name@example.com">`, 'Needed for status update emails.')}
-      ${field('f_phone', 'Phone', `<input type="tel" id="f_phone" list="dl_phones" autocomplete="off" placeholder="07700 900123">`, 'Optional if you have an email.')}
+      ${field('f_name', 'Name', `<input type="text" id="f_name" list="dl_names" autocomplete="off" placeholder="Full name"${v('customerName')}>`, null, 'full')}
+      ${field('f_email', 'Email', `<input type="email" id="f_email" list="dl_emails" autocomplete="off" placeholder="name@example.com"${v('customerEmail')}>`, 'Needed for status update emails.')}
+      ${field('f_phone', 'Phone', `<input type="tel" id="f_phone" list="dl_phones" autocomplete="off" placeholder="07700 900123"${v('customerPhone')}>`, 'Optional if you have an email.')}
       <datalist id="dl_names">${known.map((c) => `<option value="${esc(c.name)}">`).join('')}</datalist>
       <datalist id="dl_emails">${known.filter((c) => c.email).map((c) => `<option value="${esc(c.email)}">${esc(c.name)}</option>`).join('')}</datalist>
       <datalist id="dl_phones">${known.filter((c) => c.phone).map((c) => `<option value="${esc(c.phone)}">${esc(c.name)}</option>`).join('')}</datalist>
     </div>`);
   }
 
-  function idFields(biz) {
+  function idFields(biz, ed) {
     const prefix = biz === 'cs' ? 'CS' : 'HC';
     return `<div class="grid">
-      ${field('f_orderId', 'Order ID', `<input type="text" id="f_orderId" value="${esc(OT.nextOrderId(DB.orders, biz))}" spellcheck="false">`, 'Suggested automatically, change it if you need to.')}
-      ${field('f_serial', 'Serial number', `<div class="serial-wrap"><input type="text" id="f_serial" value="${prefix}" maxlength="10" spellcheck="false"><span class="counter" id="serialCount">2/10</span></div>`, `10 characters, starting with ${prefix}.`)}
+      ${field('f_orderId', 'Order ID', `<input type="text" id="f_orderId" value="${esc(ed ? ed.orderId : OT.nextOrderId(DB.orders, biz))}" spellcheck="false">`, ed ? 'Must not match another order.' : 'Suggested automatically, change it if you need to.')}
+      ${field('f_serial', 'Serial number', `<div class="serial-wrap"><input type="text" id="f_serial" value="${esc(ed ? ed.serial : prefix)}" maxlength="10" spellcheck="false"><span class="counter" id="serialCount">2/10</span></div>`, `10 characters, starting with ${prefix}.`)}
     </div>`;
   }
 
@@ -398,7 +404,7 @@
     if (input) input.classList.toggle('invalid', !!msg);
   }
 
-  function validateCommon(biz) {
+  function validateCommon(biz, selfId) {
     const errs = {};
     const name = $('#f_name').value.trim();
     const email = $('#f_email').value.trim();
@@ -411,10 +417,10 @@
     const pErr = OT.validatePhone(phone);
     if (pErr) errs.f_phone = pErr;
     if (!orderId) errs.f_orderId = 'Enter an order ID.';
-    else if (DB.orders.some((o) => o.orderId.toUpperCase() === orderId)) errs.f_orderId = `${orderId} is already used by another order.`;
+    else if (DB.orders.some((o) => o.id !== selfId && o.orderId.toUpperCase() === orderId)) errs.f_orderId = `${orderId} is already used by another order.`;
     const sErr = OT.validateSerial(serial, biz === 'cs' ? 'CS' : 'HC');
     if (sErr) errs.f_serial = sErr;
-    else if (DB.orders.some((o) => o.serial.toUpperCase() === serial)) errs.f_serial = `${serial} is already used by another order.`;
+    else if (DB.orders.some((o) => o.id !== selfId && o.serial.toUpperCase() === serial)) errs.f_serial = `${serial} is already used by another order.`;
     return { errs, values: { customerName: name, customerEmail: email, customerPhone: phone, orderId, serial } };
   }
 
@@ -511,22 +517,23 @@
 
   // The summary shell (with its buttons) is rendered once; only its contents update,
   // so a click on Create order is never lost to a re-render triggered by blur/change.
-  function summaryCard(biz, rowsHtml, total, totalLbl) {
+  function summaryCard(biz, rowsHtml, total, totalLbl, ed, note) {
     const slot = $('#sumSlot');
     if (!$('#summary', slot)) {
       slot.innerHTML = `<aside class="card summary" id="summary">
         <div class="s-top"><div class="s-eyebrow">Order summary</div><div class="s-id" id="sumId"></div></div>
         <div class="rows" id="sumRows"></div>
         <div class="total"><span class="lbl" id="sumLbl"></span><span class="amt" id="sumAmt"></span></div>
-        <div class="s-actions"><button type="submit" form="orderForm" class="btn primary lg block">${icon('check')}Create order</button>
-          <button type="button" class="btn ghost block" data-nav="${biz}">Cancel</button></div>
-        <p class="note">New orders start as Pending. You can change the status from the order page.</p>
+        <div class="s-actions"><button type="submit" form="orderForm" class="btn primary lg block">${icon('check')}${ed ? 'Save changes' : 'Create order'}</button>
+          <button type="button" class="btn ghost block" ${ed ? `data-open="${ed.id}"` : `data-nav="${biz}"`}>Cancel</button></div>
+        <p class="note" id="sumNote"></p>
       </aside>`;
     }
     $('#sumId').textContent = $('#f_orderId') ? $('#f_orderId').value : '';
     $('#sumRows').innerHTML = rowsHtml;
     $('#sumLbl').textContent = totalLbl;
     $('#sumAmt').textContent = money(total);
+    $('#sumNote').innerHTML = note || (ed ? 'Status, history and payments already ticked as paid are kept.' : 'New orders start as Pending. You can change the status from the order page.');
   }
 
   // ---------- Payment (shared by the order forms and the order page) ----------
@@ -600,52 +607,95 @@
 
   const payShort = (pay) => (!pay ? '' : pay.method === 'finance' ? `${pay.count} x ${pay.frequency}` : 'Upfront');
 
-  function notesSection(n) {
+  function notesSection(n, ed) {
     return section(n, 'Extra notes', 'Optional. Only you see these, they are never sent to the customer.',
-      `<div class="field" data-field="f_notes"><textarea id="f_notes" placeholder="Anything to remember about this order"></textarea></div>`);
+      `<div class="field" data-field="f_notes"><textarea id="f_notes" placeholder="Anything to remember about this order">${esc(ed ? ed.notes || '' : '')}</textarea></div>`);
+  }
+
+  const formHead = (biz, ed) => ed
+    ? `<button class="back" data-open="${ed.id}">${icon('back')}Back to ${esc(ed.orderId)}</button>
+      <div class="pagehead"><div><div class="crumb"><span class="bar"></span>${esc(bizName(biz))}</div><h1>Edit ${esc(ed.orderId)}</h1><p class="lede">Change anything below, then save.</p></div></div>`
+    : `<button class="back" data-nav="${biz}">${icon('back')}${esc(bizName(biz))} orders</button>
+      <div class="pagehead"><div><div class="crumb"><span class="bar"></span>${esc(bizName(biz))}</div><h1>New order</h1></div></div>`;
+
+  const origSubtotal = (o) => (o.subtotal != null ? o.subtotal : o.price);
+  const sameList = (a, b) => a.length === b.length && [...a].sort().join('\u0001') === [...b].sort().join('\u0001');
+
+  // Saves an edited order: records which fields changed, keeps status and history,
+  // keeps payments already ticked as paid, and re-applies the discount to the new subtotal.
+  async function saveEdit(o, fields, subtotal, disc, pay) {
+    const fmtDisc = (d) => (d && d.amount > 0 ? `${d.type}:${d.value}:${d.label || ''}` : '');
+    const fmtPay = (p) => (p && p.method === 'finance' ? `f:${p.frequency}:${p.count}:${p.start}` : 'u');
+    const labels = {
+      customerName: 'name', customerEmail: 'email', customerPhone: 'phone', orderId: 'order ID', serial: 'serial',
+      model: 'model', colourId: 'colour', delivery: 'delivery', addonIds: 'options', donor: 'donor calculator', extraGames: 'extra games', notes: 'notes'
+    };
+    const changed = Object.keys(labels).filter((k) => k in fields && JSON.stringify(fields[k] ?? '') !== JSON.stringify(o[k] ?? '')).map((k) => labels[k]);
+    const oldDisc = fmtDisc(o.discount), oldPay = fmtPay(o.payment), oldPrice = o.price;
+    Object.assign(o, fields);
+    o.subtotal = subtotal;
+    o.price = subtotal;
+    OT.applyDiscount(o, disc);
+    if (fmtDisc(o.discount) !== oldDisc) changed.push('discount');
+    const old = o.payment || {};
+    if (pay.method === 'finance' && old.method === 'finance') pay.paid = (old.paid || []).slice(0, pay.count);
+    if (pay.method === 'upfront' && old.method === 'upfront') pay.paid = !!old.paid;
+    if (fmtPay(pay) !== oldPay) changed.push('payment');
+    o.payment = pay;
+    if (o.price !== oldPrice) changed.push(`price ${money(oldPrice)} to ${money(o.price)}`);
+    if (changed.length) o.history.push({ status: o.status, at: Date.now(), email: 'none', note: `Edited ${changed.join(', ')}` });
+    if (await persist(changed.length ? `${o.orderId} updated` : 'No changes to save')) go('order', { id: o.id, biz: o.business });
   }
 
   // ---------- ClearSense form ----------
-  function renderCsForm() {
+  function renderCsForm(ed) {
     const s = S().cs;
+    let initColour = ed ? ed.colourId : null;
+    let initDelivery = ed ? ed.delivery : null;
     main.innerHTML = `
-      <button class="back" data-nav="cs">${icon('back')}${esc(bizName('cs'))} orders</button>
-      <div class="pagehead"><div><div class="crumb"><span class="bar"></span>${esc(bizName('cs'))}</div><h1>New order</h1></div></div>
+      ${formHead('cs', ed)}
       <div class="formlayout">
         <form class="card" id="orderForm" novalidate>
-          ${customerSection(1)}
-          ${section(2, 'Order', null, idFields('cs'))}
+          ${customerSection(1, ed)}
+          ${section(2, 'Order', null, idFields('cs', ed))}
           ${section(3, 'Controller', 'Pick the BDM model, then the colour. Installation is always included.', `
             <div class="field" data-field="f_model"><span class="flabel">BDM model</span>
-              <div class="tiles models">${s.models.map((m) => `<label class="tile"><input type="radio" name="model" value="${esc(m)}">${esc(m)}</label>`).join('')}</div><div class="err" hidden></div></div>
+              <div class="tiles models">${s.models.map((m) => `<label class="tile"><input type="radio" name="model" value="${esc(m)}" ${ed && ed.model === m ? 'checked' : ''}>${esc(m)}</label>`).join('')}</div><div class="err" hidden></div></div>
             <div class="field" data-field="f_colour" style="margin-top:18px"><span class="flabel">Colour</span><div id="colourBox"></div><div class="err" hidden></div></div>
             <div class="field" data-field="f_delivery" style="margin-top:18px"><span class="flabel">Delivery</span><div id="deliveryBox"></div><div class="err" hidden></div></div>`)}
-          ${section(4, 'Options', 'Optional. Tick any that apply.', s.addons.length ? `<div class="tiles addons">${s.addons.map((a) => `<label class="tile"><input type="checkbox" name="addon" value="${a.id}"><span class="box">${icon('check')}</span><span class="t-main"><span class="t-title">${esc(a.name)}</span></span>${num(a.price) ? `<span class="t-price">+${money(a.price)}</span>` : ''}</label>`).join('')}</div>` : '<div class="placeholder-note">No options set up. Add them in Settings.</div>')}
-          ${section(5, 'Discount', 'Optional. Pick a saved discount or enter a custom one.', discountPicker(null))}
-          ${section(6, 'Payment', 'How the customer is paying.', paymentPicker(null))}
-          ${notesSection(7)}
+          ${section(4, 'Options', 'Optional. Tick any that apply.', s.addons.length ? `<div class="tiles addons">${s.addons.map((a) => `<label class="tile"><input type="checkbox" name="addon" value="${a.id}" ${ed && (ed.addonIds || []).includes(a.id) ? 'checked' : ''}><span class="box">${icon('check')}</span><span class="t-main"><span class="t-title">${esc(a.name)}</span></span>${num(a.price) ? `<span class="t-price">+${money(a.price)}</span>` : ''}</label>`).join('')}</div>` : '<div class="placeholder-note">No options set up. Add them in Settings.</div>')}
+          ${section(5, 'Discount', 'Optional. Pick a saved discount or enter a custom one.', discountPicker(ed && ed.discount && ed.discount.amount > 0 ? ed.discount : null))}
+          ${section(6, 'Payment', 'How the customer is paying.', paymentPicker(ed ? ed.payment : null))}
+          ${notesSection(7, ed)}
         </form>
         <div id="sumSlot"></div>
       </div>`;
 
     const val = (n) => ($(`input[name=${n}]:checked`) || {}).value || '';
     const addons = () => $$('input[name=addon]:checked').map((i) => i.value);
+    // While editing, the original price is kept unless the product itself changes.
+    const sameProduct = () => !!ed && val('model') === ed.model && val('colour') === ed.colourId && val('delivery') === ed.delivery && sameList(addons(), ed.addonIds || []);
+    const subtotalNow = () => (sameProduct() ? origSubtotal(ed) : OT.csPrice(S(), val('colour'), val('delivery'), addons()));
 
     function drawColours() {
       const model = val('model');
-      const prev = val('colour');
+      const prev = val('colour') || initColour;
+      initColour = null;
       const list = OT.coloursFor(S(), model);
+      const missing = ed && model === ed.model && prev === ed.colourId && !list.some((c) => c.id === ed.colourId);
       $('#colourBox').innerHTML = !model
         ? '<div class="placeholder-note">Choose a model to see its colours.</div>'
         : list.length ? `<div class="tiles colours">${list.map((c) => {
           const prices = OT.deliveryOptions(c).map((o) => o.price);
           return `<label class="tile"><input type="radio" name="colour" value="${c.id}" ${c.id === prev ? 'checked' : ''}>${swatch(c.swatch, true)}<span class="t-main"><span class="t-title">${esc(c.name)}</span><span class="t-sub">from ${money(Math.min(...prices))}</span></span></label>`;
         }).join('')}</div>` : '<div class="placeholder-note">No colours are set up for this model.</div>';
+      if (missing) $('#colourBox').insertAdjacentHTML('afterbegin', `<div class="callout" style="margin-bottom:10px">${icon('info')}<div>This order's colour, ${esc(ed.colourName)}, is no longer offered for ${esc(model)} in Settings. Choose a colour to save changes.</div></div>`);
       drawDelivery();
     }
     function drawDelivery() {
       const c = s.colours.find((x) => x.id === val('colour'));
-      const prev = val('delivery');
+      const prev = val('delivery') || initDelivery;
+      initDelivery = null;
       const opts = OT.deliveryOptions(c);
       $('#deliveryBox').innerHTML = !opts.length
         ? '<div class="placeholder-note">Choose a colour to see delivery options.</div>'
@@ -655,9 +705,11 @@
     function drawSummary() {
       const c = s.colours.find((x) => x.id === val('colour'));
       const d = val('delivery');
-      const price = OT.csPrice(S(), val('colour'), d, addons());
+      const price = subtotalNow();
       const names = addons().map((id) => (s.addons.find((a) => a.id === id) || {}).name).filter(Boolean);
       const disc = discountSummary(price || 0, $('#orderForm'));
+      const note = ed && price != null && !sameProduct() && price !== origSubtotal(ed)
+        ? `The product changed, so the price before discount is now ${money(price)} (was ${money(origSubtotal(ed))}), using current Settings prices.` : '';
       summaryCard('cs',
         sumRow('Customer', esc($('#f_name').value.trim())) +
         sumRow('Serial', $('#f_serial').value.length > 2 ? `<span class="mono">${esc($('#f_serial').value)}</span>` : '') +
@@ -668,12 +720,12 @@
         sumRow('Installation', 'Included') +
         sumRow('Payment', esc(payShort(readPayment($('#orderForm')).p) || 'Check finance details')) +
         (price == null ? '' : disc.rows),
-        price == null ? 0 : disc.total, price == null ? 'Choose colour and delivery' : 'Total');
+        price == null ? 0 : disc.total, price == null ? 'Choose colour and delivery' : 'Total', ed, note);
     }
 
     wireCommon('cs', drawSummary);
     wireDiscount($('#orderForm'), drawSummary);
-    const csTotal = () => discountSummary(OT.csPrice(S(), val('colour'), val('delivery'), addons()) || 0, $('#orderForm')).total;
+    const csTotal = () => discountSummary(subtotalNow() || 0, $('#orderForm')).total;
     wirePayment($('#orderForm'), csTotal);
     $('#orderForm').addEventListener('change', () => drawFinancePreview($('#orderForm'), csTotal()));
     $('#orderForm').addEventListener('input', (e) => { if (e.target.id === 'd_value') drawFinancePreview($('#orderForm'), csTotal()); });
@@ -686,7 +738,7 @@
 
     $('#orderForm').onsubmit = (e) => {
       e.preventDefault();
-      const { errs, values } = validateCommon('cs');
+      const { errs, values } = validateCommon('cs', ed && ed.id);
       if (!val('model')) errs.f_model = 'Choose a BDM model.';
       if (!val('colour')) errs.f_colour = 'Choose a colour.';
       else if (!val('delivery')) errs.f_delivery = 'Choose a delivery type.';
@@ -697,6 +749,15 @@
       if (!showErrors(['f_name', 'f_email', 'f_phone', 'f_orderId', 'f_serial', 'f_model', 'f_colour', 'f_delivery', 'f_disc', 'f_pay'], errs)) return;
       const c = s.colours.find((x) => x.id === val('colour'));
       const addonIds = addons();
+      if (ed) {
+        const keep = sameProduct();
+        return saveEdit(ed, {
+          ...values, model: val('model'), colourId: c.id, colourName: keep ? ed.colourName : c.name, swatch: c.swatch,
+          delivery: val('delivery'), addonIds,
+          addonNames: keep ? ed.addonNames : addonIds.map((id) => (s.addons.find((a) => a.id === id) || {}).name).filter(Boolean),
+          notes: $('#f_notes').value.trim()
+        }, subtotalNow(), disc.d, pay.p);
+      }
       createOrder(OT.applyDiscount({
         business: 'cs', ...values,
         model: val('model'), colourId: c.id, colourName: c.name, swatch: c.swatch,
@@ -709,30 +770,34 @@
   }
 
   // ---------- Hackulator form ----------
-  function renderHackForm() {
+  function renderHackForm(ed) {
     const h = S().hack;
     main.innerHTML = `
-      <button class="back" data-nav="hack">${icon('back')}${esc(bizName('hack'))} orders</button>
-      <div class="pagehead"><div><div class="crumb"><span class="bar"></span>${esc(bizName('hack'))}</div><h1>New order</h1></div></div>
+      ${formHead('hack', ed)}
       <div class="formlayout">
         <form class="card" id="orderForm" novalidate>
-          ${customerSection(1)}
-          ${section(2, 'Order', null, idFields('hack'))}
-          ${section(3, 'Calculator', null, `<div class="grid">${field('f_donor', 'Donor calculator', `<input type="text" id="f_donor" placeholder="For example TI-84 Plus CE">`, null, 'full')}</div>`)}
+          ${customerSection(1, ed)}
+          ${section(2, 'Order', null, idFields('hack', ed))}
+          ${section(3, 'Calculator', null, `<div class="grid">${field('f_donor', 'Donor calculator', `<input type="text" id="f_donor" placeholder="For example TI-84 Plus CE" value="${esc(ed ? ed.donor : '')}">`, null, 'full')}</div>`)}
           ${section(4, 'Games', `${h.includedGames.length ? esc(h.includedGames.join(', ')) + ' are' : 'The base games are'} included in the ${money(h.basePrice)} base price.`, `
             <div class="tiles addons" style="margin-bottom:16px">${h.includedGames.map((g) => `<div class="tile" style="cursor:default;background:var(--surface-warm)"><span class="box" style="background:var(--ink);border-color:var(--ink)">${icon('check').replace('class="ic', 'style="opacity:1" class="ic')}</span><span class="t-main"><span class="t-title">${esc(g)}</span></span><span class="t-sub">Included</span></div>`).join('')}</div>
-            ${field('f_games', 'Extra games', `<textarea id="f_games" placeholder="One game per line"></textarea>`, `One game per line, ${money(h.extraGamePrice)} each.`)}`)}
-          ${section(5, 'Discount', 'Optional. Pick a saved discount or enter a custom one.', discountPicker(null))}
-          ${section(6, 'Payment', 'How the customer is paying.', paymentPicker(null))}
-          ${notesSection(7)}
+            ${field('f_games', 'Extra games', `<textarea id="f_games" placeholder="One game per line">${esc(ed ? (ed.extraGames || []).join('\n') : '')}</textarea>`, `One game per line, ${money(h.extraGamePrice)} each.`)}`)}
+          ${section(5, 'Discount', 'Optional. Pick a saved discount or enter a custom one.', discountPicker(ed && ed.discount && ed.discount.amount > 0 ? ed.discount : null))}
+          ${section(6, 'Payment', 'How the customer is paying.', paymentPicker(ed ? ed.payment : null))}
+          ${notesSection(7, ed)}
         </form>
         <div id="sumSlot"></div>
       </div>`;
 
     const games = $('#f_games');
+    const sameGames = () => !!ed && JSON.stringify(OT.parseGames(games.value)) === JSON.stringify(ed.extraGames || []);
+    const subtotalNow = () => (sameGames() ? origSubtotal(ed) : OT.hackPrice(S(), OT.parseGames(games.value)));
     function drawSummary() {
       const extra = OT.parseGames(games.value);
-      const disc = discountSummary(OT.hackPrice(S(), extra), $('#orderForm'));
+      const sub = subtotalNow();
+      const disc = discountSummary(sub, $('#orderForm'));
+      const note = ed && !sameGames() && sub !== origSubtotal(ed)
+        ? `The games changed, so the price before discount is now ${money(sub)} (was ${money(origSubtotal(ed))}), using current Settings prices.` : '';
       summaryCard('hack',
         sumRow('Customer', esc($('#f_name').value.trim())) +
         sumRow('Serial', $('#f_serial').value.length > 2 ? `<span class="mono">${esc($('#f_serial').value)}</span>` : '') +
@@ -741,11 +806,11 @@
         sumRow(`Extra games (${extra.length})`, extra.length ? `${extra.length} x ${money(h.extraGamePrice)}` : '<span class="empty-val">None</span>') +
         sumRow('Payment', esc(payShort(readPayment($('#orderForm')).p) || 'Check finance details')) +
         disc.rows,
-        disc.total, 'Total');
+        disc.total, 'Total', ed, note);
     }
     wireCommon('hack', drawSummary);
     wireDiscount($('#orderForm'), drawSummary);
-    const hackTotal = () => discountSummary(OT.hackPrice(S(), OT.parseGames(games.value)), $('#orderForm')).total;
+    const hackTotal = () => discountSummary(subtotalNow(), $('#orderForm')).total;
     wirePayment($('#orderForm'), hackTotal);
     $('#orderForm').addEventListener('change', () => drawFinancePreview($('#orderForm'), hackTotal()));
     $('#orderForm').addEventListener('input', (e) => { if (e.target.id === 'd_value' || e.target.id === 'f_games') drawFinancePreview($('#orderForm'), hackTotal()); });
@@ -753,7 +818,7 @@
     $('#f_name').focus();
     $('#orderForm').onsubmit = (e) => {
       e.preventDefault();
-      const { errs, values } = validateCommon('hack');
+      const { errs, values } = validateCommon('hack', ed && ed.id);
       const donor = $('#f_donor').value.trim();
       if (!donor) errs.f_donor = 'Enter the donor calculator.';
       const disc = readDiscount($('#orderForm'));
@@ -762,6 +827,7 @@
       if (pay.err) errs.f_pay = pay.err;
       if (!showErrors(['f_name', 'f_email', 'f_phone', 'f_orderId', 'f_serial', 'f_donor', 'f_disc', 'f_pay'], errs)) return;
       const extraGames = OT.parseGames(games.value);
+      if (ed) return saveEdit(ed, { ...values, donor, extraGames, notes: $('#f_notes').value.trim() }, subtotalNow(), disc.d, pay.p);
       createOrder(OT.applyDiscount({ business: 'hack', ...values, donor, includedGames: [...h.includedGames], extraGames, price: OT.hackPrice(S(), extraGames), payment: pay.p, notes: $('#f_notes').value.trim() }, disc.d));
     };
   }
@@ -804,7 +870,8 @@
     const priceNote = o.business === 'cs' ? 'Installation included' : `${(o.extraGames || []).length} extra game${(o.extraGames || []).length === 1 ? '' : 's'}`;
 
     main.innerHTML = `
-      <button class="back" data-nav="${o.business}">${icon('back')}${esc(bizName(o.business))} orders</button>
+      <div class="ordertop"><button class="back" data-nav="${o.business}">${icon('back')}${esc(bizName(o.business))} orders</button>
+        <button class="btn" data-action="editOrder">${icon('edit')}Edit order</button></div>
       <section class="card hero">
         <div class="hero-top">
           <div>
@@ -877,6 +944,7 @@
               ${cancelled
                 ? `<div class="manage-row"><div><b>Reopen order</b><span>Put it back to ${esc(OT.statusLabel(o.cancelledFrom || 'pending'))}.</span></div><button class="btn sm" data-action="reopenOrder">Reopen</button></div>`
                 : `<div class="manage-row"><div><b>Cancel order</b><span>Keeps it on record as Cancelled. You can reopen it later.</span></div><button class="btn sm" data-action="cancelOrder">${icon('x')}Cancel order</button></div>`}
+              <div class="manage-row"><div><b>Edit order</b><span>Change the customer, product, discount, payment or notes.</span></div><button class="btn sm" data-action="editOrder">${icon('edit')}Edit</button></div>
               <div class="manage-row"><div><b>Delete permanently</b><span>Removes the order completely. This cannot be undone.</span></div><button class="btn sm danger" data-action="deleteOrder">${icon('trash')}Delete</button></div>
             </div>
           </section>
@@ -1401,6 +1469,7 @@
       case 'editDiscount': return order && editDiscount(order);
       case 'cancelOrder': return order && cancelOrder(order);
       case 'editPayment': return order && editPayment(order);
+      case 'editOrder': return order && go('edit', { id: order.id, biz: order.business });
       case 'editNotes': return order && editNotes(order);
       case 'toggleUpfront':
         if (order) {
@@ -1444,6 +1513,10 @@
       e.preventDefault();
       if (window.matchMedia('(max-width: 760px)').matches) $('#shell').classList.add('nav-open');
       $('#findInput').focus(); $('#findInput').select();
+    }
+    if (mod && e.key.toLowerCase() === 'e' && route.page === 'order') {
+      e.preventDefault();
+      go('edit', { id: route.id, biz: route.biz });
     }
     if (mod && e.key.toLowerCase() === 'n') {
       e.preventDefault();

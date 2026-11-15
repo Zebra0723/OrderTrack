@@ -27,6 +27,7 @@ The version number is shown at the bottom of the sidebar, so you can check you a
 - Customers can be recorded with an email, a phone number, or both. Orders sharing an email or phone are grouped as one customer.
 - Discounts: saved one-click discounts (set in Settings) or a custom percent or amount per order, changeable later from the order page. Shown in the order summary and in customer emails.
 - Payment: pay upfront (with a paid toggle) or finance, choosing weekly or monthly, the number of payments and the first payment date. The order page shows the instalment schedule with paid ticks and overdue payments highlighted.
+- Edit any order after creating it (Edit order button, or Cmd+E on an order page). The original price is kept unless the product itself changes; status, history and paid payments are kept, and the history records what was edited.
 - Extra notes on each order, private to you and never sent to customers.
 - Cancel an order (kept on record, left out of open orders and totals, can be reopened) or delete it permanently.
 - Passcode lock on launch.
