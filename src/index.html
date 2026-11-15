@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; script-src 'self'">
+  <title>OrderTrack</title>
+  <link rel="stylesheet" href="../node_modules/@fontsource-variable/fraunces/index.css">
+  <link rel="stylesheet" href="../node_modules/@fontsource-variable/instrument-sans/index.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="lock" class="lock" hidden></div>
+  <div id="shell" hidden>
+    <header class="topbar">
+      <div class="brand">Order<span>Track</span></div>
+      <div class="switch" role="tablist" aria-label="Business">
+        <button data-nav="cs" role="tab">ClearSense</button>
+        <button data-nav="hack" role="tab">Hackulator</button>
+      </div>
+      <nav class="links">
+        <button data-nav="customers">Customers</button>
+        <button data-nav="settings">Settings</button>
+      </nav>
+      <form id="find" class="find" autocomplete="off">
+        <input id="findInput" type="search" placeholder="Find order by serial or order ID" aria-label="Find order" spellcheck="false">
+      </form>
+      <button class="lockbtn" data-action="lock" title="Lock">Lock</button>
+    </header>
+    <main id="main"></main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="modal" class="modal" hidden></div>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

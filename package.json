@@ -1,0 +1,47 @@
+{
+  "name": "ordertrack",
+  "productName": "OrderTrack",
+  "version": "1.0.0",
+  "description": "Order manager for ClearSense and Hackulator",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac dmg --arm64 --x64 --publish never"
+  },
+  "build": {
+    "appId": "com.zebra0723.ordertrack",
+    "productName": "OrderTrack",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.business",
+      "icon": "build/icon.png",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "target": [
+        "dmg"
+      ]
+    },
+    "dmg": {
+      "title": "OrderTrack"
+    }
+  },
+  "dependencies": {
+    "@fontsource-variable/fraunces": "^5.3.0",
+    "@fontsource-variable/instrument-sans": "^5.3.0",
+    "nodemailer": "^10.5.0"
+  },
+  "devDependencies": {
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0"
+  }
+}
