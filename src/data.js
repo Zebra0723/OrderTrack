@@ -12,8 +12,14 @@
 
   const LATER = ['BDM-030', 'BDM-040', 'BDM-050'];
   const EARLY = ['BDM-010', 'BDM-020'];
+  const SWATCHES = {
+    'clear': '#E4EBEF', 'purple tinted clear': '#CDB8E8', 'black': '#1F1F23', 'scarlet': '#C8102E',
+    'grey with black buttons': '#9C9CA3', 'emerald clear': '#3FBF8A', 'purple clear': '#9B6BD6',
+    'black clear': '#55555C', 'lime green clear': '#A6DD2E', 'dragon': '#B8452A', 'anime': '#F27AB0'
+  };
+  const guessSwatch = (name) => SWATCHES[String(name).toLowerCase()] || '#C9C2B6';
   const colour = (name, models, std, exp) => ({
-    id: uid(), name, models: [...models],
+    id: uid(), name, models: [...models], swatch: guessSwatch(name),
     standard: { available: std != null, price: std ?? 30 },
     express: { available: exp != null, price: exp ?? 37 }
   });
@@ -65,6 +71,7 @@
     const d = emptyDB();
     if (!db || typeof db !== 'object') return d;
     const s = db.settings || {};
+    if (s.cs && Array.isArray(s.cs.colours)) s.cs.colours.forEach((c) => { if (!c.swatch) c.swatch = guessSwatch(c.name); });
     return {
       version: 1,
       security: db.security || null,
@@ -210,6 +217,6 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
   window.OT = {
     STATUSES, uid, emptyDB, migrate, money, num, coloursFor, deliveryOptions, deliveryText,
     csPrice, parseGames, hackPrice, validateSerial, nextOrderId, statusLabel, orderLines,
-    buildStatusEmail, customers, hashPasscode, esc
+    buildStatusEmail, customers, hashPasscode, esc, guessSwatch
   };
 })();

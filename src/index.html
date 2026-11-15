@@ -11,23 +11,18 @@
 </head>
 <body>
   <div id="lock" class="lock" hidden></div>
-  <div id="shell" hidden>
-    <header class="topbar">
-      <div class="brand">Order<span>Track</span></div>
-      <div class="switch" role="tablist" aria-label="Business">
-        <button data-nav="cs" role="tab">ClearSense</button>
-        <button data-nav="hack" role="tab">Hackulator</button>
-      </div>
-      <nav class="links">
-        <button data-nav="customers">Customers</button>
-        <button data-nav="settings">Settings</button>
-      </nav>
-      <form id="find" class="find" autocomplete="off">
-        <input id="findInput" type="search" placeholder="Find order by serial or order ID" aria-label="Find order" spellcheck="false">
-      </form>
-      <button class="lockbtn" data-action="lock" title="Lock">Lock</button>
-    </header>
-    <main id="main"></main>
+  <div id="shell" class="app" hidden>
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="scrim" data-action="closeNav"></div>
+    <div class="content" id="content">
+      <div class="titlebar"></div>
+      <header class="mobilebar">
+        <button class="iconbtn" data-action="openNav" aria-label="Open menu"></button>
+        <div class="mb-title" id="mbTitle">OrderTrack</div>
+        <span></span>
+      </header>
+      <main id="main"></main>
+    </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="modal" class="modal" hidden></div>
