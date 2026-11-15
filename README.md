@@ -41,6 +41,18 @@ The version number is shown at the bottom of the sidebar, so you can check you a
 - Cancel an order (kept on record, left out of open orders and totals, can be reopened) or delete it permanently.
 - Passcode lock on launch.
 
+## Orders from Comet (iMessage)
+
+Comet, the iMessage assistant, can take orders from customers and create them here. In Settings, Comet, turn on "Let Comet create orders" and copy the key into Comet's `.env` as `ORDERTRACK_TOKEN` (with `ORDERTRACK_URL=http://127.0.0.1:8790`). Optionally paste an eXtremeRate product link on each colour (Settings, Colours) to choose exactly which photos Comet sends; otherwise Comet finds them on eXtremeRate's site.
+
+OrderTrack then serves a small API on 127.0.0.1 only, which needs that key and refuses browser requests:
+
+- `GET /api/health`
+- `GET /api/catalog`: models, colours per model with delivery types, prices and stock, optional extras, Hackulator pricing and payment options
+- `POST /api/orders`: creates an order. OrderTrack validates it and prices it from Settings (prices in the request are ignored), assigns the order ID and serial, takes stock and records costs. Comet orders start as Pending and their history says "Ordered over iMessage with Comet". The controller's own serial is saved on the order.
+
+OrderTrack has to be running for this. Closing the window keeps it running on a Mac; quitting with Cmd+Q stops it, and Comet holds any orders until it is back.
+
 ## Data and email
 
 - Data is stored on the Mac at `~/Library/Application Support/OrderTrack/ordertrack-data.json`. The previous version is kept in `ordertrack-data.backup.json`. Use Settings, Data, Export backup for off-machine copies.
