@@ -399,9 +399,15 @@
     const name = $('#f_name'), email = $('#f_email'), phone = $('#f_phone'), serial = $('#f_serial'), oid = $('#f_orderId');
     const fill = (c) => {
       if (!c) return;
-      if (!name.value) name.value = c.name;
-      if (!email.value && c.email) email.value = c.email;
-      if (!phone.value && c.phone) phone.value = c.phone;
+      const filled = [];
+      if (!name.value) { name.value = c.name; filled.push(name); }
+      if (!email.value && c.email) { email.value = c.email; filled.push(email); }
+      if (!phone.value && c.phone) { phone.value = c.phone; filled.push(phone); }
+      // If the cursor is in a box we just filled, select it so typing replaces it
+      // rather than adding on to the end.
+      const active = document.activeElement;
+      if (filled.includes(active)) active.select();
+      else if (filled.length) setTimeout(() => { if (filled.includes(document.activeElement)) document.activeElement.select(); }, 0);
       ['f_email', 'f_phone'].forEach((id) => setErr(id, ''));
       onChange();
     };
@@ -1234,7 +1240,7 @@
             <span class="chev">${icon('chev')}</span>
           </summary>
           <div class="body">${orderTable(c.orders, true)}
-            <div class="cust-actions"><button class="btn sm" data-action="cometInvite" data-contact="${esc(c.phone || c.email || '')}" data-name="${esc(c.name)}" data-biz="${esc(c.orders[0] ? c.orders[0].business : 'cs')}">${icon('send')}Message via Comet</button></div></div>
+            <div class="cust-actions"><button class="btn sm" data-action="cometInvite" data-contact="${esc(c.phone || c.email || '')}" data-name="${esc(c.name)}" data-biz="${esc(c.orders[0] ? c.orders[0].business : 'cs')}">${icon('send')}Message via Comet</button><button class="btn sm danger" data-action="deleteCustomer" data-key="${esc(c.key)}">${icon('trash')}Delete customer</button></div></div>
         </details>`;
       }).join('') : `<div class="empty"><div class="art">${icon('users')}</div><h3>${all.length ? 'No matching customers' : 'No customers yet'}</h3><p>${all.length ? 'Try a different name or email.' : 'Customers appear here once you create orders.'}</p></div>`;
       $$('.cust').forEach((d) => d.addEventListener('toggle', () => { if (d.open) openCustomer = d.dataset.key; }));
@@ -2636,6 +2642,28 @@
   }
 
 
+  // ---------- Delete a customer ----------
+  // A customer is everyone sharing an email or phone across orders, so deleting
+  // one deletes their orders, gives back stock for anything not yet shipped, and
+  // removes their Contact via Comet requests.
+  async function deleteCustomer(key) {
+    const c = OT.customers(DB.orders).find((x) => x.key === key);
+    if (!c) return;
+    const n = c.orders.length;
+    const open = c.orders.filter(OT.isOpen);
+    const ids = c.orders.map((o) => esc(o.orderId)).join(', ');
+    const warn = open.length ? `<br><br><b style="color:var(--coral-ink)">${open.length} of these ${open.length === 1 ? 'is' : 'are'} still open.</b> To keep a record instead, cancel the orders.` : '';
+    if (!(await confirmBox(`Delete ${c.name}?`, `This permanently deletes ${c.name} and ${n === 1 ? 'their order' : `all ${n} of their orders`} (${ids}), ${money(c.total)} in total. It cannot be undone.${warn}`, n === 1 ? 'Delete customer and order' : `Delete customer and ${n} orders`, true))) return;
+    for (const o of c.orders) if (!['shipped', 'delivered'].includes(o.status)) OT.returnStock(S(), o);
+    const gone = new Set(c.orders);
+    DB.orders = DB.orders.filter((o) => !gone.has(o));
+    const keys = new Set([contactKey(c.email), contactKey(c.phone)].filter(Boolean));
+    DB.outreach = (DB.outreach || []).filter((x) => !keys.has(contactKey(x.contact)));
+    openCustomer = null;
+    await persist(`Deleted ${c.name} and ${n} order${n === 1 ? '' : 's'}`);
+    render();
+  }
+
   // ---------- Global events ----------
   async function handleAction(action, el) {
     const order = route.page === 'order' ? DB.orders.find((x) => x.id === route.id) : null;
@@ -2657,6 +2685,7 @@
       case 'cancelOrder': return order && cancelOrder(order);
       case 'editPayment': return order && editPayment(order);
       case 'editOrder': return order && go('edit', { id: order.id, biz: order.business });
+      case 'deleteCustomer': return deleteCustomer(el.dataset.key);
       case 'cometInvite': return openCometInvite({ contact: el.dataset.contact, name: el.dataset.name, business: el.dataset.biz });
       case 'outreachRemove': case 'outreachRetry': case 'outreachOpen': return outreachAction(action, el);
       case 'markReceived': return order && markReceived(order);
