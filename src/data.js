@@ -7,6 +7,18 @@
     { id: 'shipped', label: 'Shipped', line: 'Your order has been shipped and is on its way to you.' },
     { id: 'delivered', label: 'Delivered', line: 'Your order has been delivered. Thank you for your order.' }
   ];
+  // Cancelled sits outside the normal five-step flow.
+  const CANCELLED = { id: 'cancelled', label: 'Cancelled', line: 'Your order has been cancelled. If you have any questions, just reply to this email.' };
+  const statusInfo = (id) => STATUSES.find((s) => s.id === id) || (id === 'cancelled' ? CANCELLED : null);
+  const isOpen = (o) => o.status !== 'delivered' && o.status !== 'cancelled';
+  const phoneDigits = (p) => String(p || '').replace(/\D/g, '');
+  function validatePhone(p) {
+    if (!p) return null;
+    if (!/^[+\d\s().-]+$/.test(p)) return 'Phone numbers can only use digits, spaces, +, brackets and dashes.';
+    const n = phoneDigits(p).length;
+    if (n < 7 || n > 15) return 'That phone number looks too short or too long.';
+    return null;
+  }
 
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
@@ -58,7 +70,8 @@
       email: {
         host: '', port: 587, user: '', fromName: 'ClearSense and Hackulator', fromEmail: '',
         signOff: 'Thanks,\nThe ClearSense and Hackulator team'
-      }
+      },
+      discounts: []
     };
   }
 
@@ -80,7 +93,8 @@
         businessNames: { ...d.settings.businessNames, ...(s.businessNames || {}) },
         cs: { ...d.settings.cs, ...(s.cs || {}) },
         hack: { ...d.settings.hack, ...(s.hack || {}) },
-        email: { ...d.settings.email, ...(s.email || {}) }
+        email: { ...d.settings.email, ...(s.email || {}) },
+        discounts: Array.isArray(s.discounts) ? s.discounts : d.settings.discounts
       }
     };
   }
@@ -117,6 +131,64 @@
     return opt.price + extras;
   }
 
+  // Discounts: { type: 'percent' | 'fixed', value, label }. Never takes a price below zero.
+  const round2 = (n) => Math.round(n * 100) / 100;
+  function discountAmount(subtotal, d) {
+    if (!d) return 0;
+    const v = Math.max(num(d.value), 0);
+    const raw = d.type === 'percent' ? subtotal * Math.min(v, 100) / 100 : v;
+    return round2(Math.min(raw, subtotal));
+  }
+  function discountText(d) {
+    if (!d) return '';
+    return d.type === 'percent' ? `${num(d.value)}% off` : `${money(d.value)} off`;
+  }
+  // Applies a discount to an order in place, keeping the pre-discount subtotal.
+  function applyDiscount(order, d) {
+    const subtotal = order.subtotal != null ? order.subtotal : order.price;
+    order.subtotal = subtotal;
+    if (d && discountAmount(subtotal, d) > 0) {
+      const amount = discountAmount(subtotal, d);
+      order.discount = { type: d.type, value: num(d.value), label: String(d.label || '').trim(), amount };
+      order.price = round2(subtotal - amount);
+    } else {
+      order.discount = null;
+      order.price = subtotal;
+    }
+    return order;
+  }
+
+  // Payment: { method: 'upfront', paid } or
+  // { method: 'finance', frequency: 'weekly' | 'monthly', count, start: 'YYYY-MM-DD', paid: [bool] }.
+  function addMonthsSafe(d, n) {
+    const r = new Date(d.getFullYear(), d.getMonth() + n, 1, 12);
+    const last = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate();
+    r.setDate(Math.min(d.getDate(), last));
+    return r;
+  }
+  function paymentSchedule(o) {
+    const p = o.payment;
+    if (!p || p.method !== 'finance') return [];
+    const n = Math.max(1, Math.round(num(p.count)));
+    const total = Math.round(num(o.price) * 100);
+    const base = Math.floor(total / n);
+    const rem = total - base * n;
+    const start = new Date((p.start || new Date().toISOString().slice(0, 10)) + 'T12:00:00');
+    return Array.from({ length: n }, (_, i) => {
+      let due;
+      if (p.frequency === 'weekly') { due = new Date(start); due.setDate(due.getDate() + 7 * i); } else due = addMonthsSafe(start, i);
+      return { n: i + 1, due, amount: (base + (i < rem ? 1 : 0)) / 100, paid: !!(p.paid || [])[i] };
+    });
+  }
+  const fmtDay = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  function paymentText(o) {
+    const p = o.payment;
+    if (!p || p.method !== 'finance') return 'Pay upfront';
+    const s = paymentSchedule(o);
+    const same = s.every((x) => x.amount === s[0].amount);
+    return `Finance, ${s.length} ${p.frequency === 'weekly' ? 'weekly' : 'monthly'} payments of ${same ? '' : 'about '}${money(s[0].amount)} from ${fmtDay(s[0].due)}`;
+  }
+
   function parseGames(text) {
     return String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   }
@@ -144,7 +216,7 @@
     return prefix + String(max + 1).padStart(3, '0');
   }
 
-  function statusLabel(id) { return (STATUSES.find((s) => s.id === id) || { label: id }).label; }
+  function statusLabel(id) { return (statusInfo(id) || { label: id }).label; }
 
   function orderLines(settings, o) {
     const lines = [['Order ID', o.orderId], ['Serial number', o.serial]];
@@ -159,7 +231,13 @@
       lines.push(['Included games', (o.includedGames || []).join(', ')]);
       if (o.extraGames && o.extraGames.length) lines.push(['Extra games', o.extraGames.join(', ')]);
     }
+    if (o.discount && o.discount.amount > 0) {
+      lines.push(['Subtotal', money(o.subtotal)]);
+      const why = o.discount.label ? `${o.discount.label}, ${discountText(o.discount)}` : discountText(o.discount);
+      lines.push(['Discount', `-${money(o.discount.amount)} (${why})`]);
+    }
     lines.push(['Price', money(o.price)]);
+    lines.push(['Payment', paymentText(o)]);
     return lines;
   }
 
@@ -167,7 +245,7 @@
 
   function buildStatusEmail(settings, o) {
     const biz = settings.businessNames[o.business];
-    const st = STATUSES.find((s) => s.id === o.status) || STATUSES[0];
+    const st = statusInfo(o.status) || STATUSES[0];
     const first = String(o.customerName || '').trim().split(/\s+/)[0] || 'there';
     const lines = orderLines(settings, o);
     const subject = `${biz} order ${o.orderId}: ${st.label}`;
@@ -193,19 +271,53 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
     return { to: o.customerEmail, subject, text, html };
   }
 
+  // One customer per email; customers with no email are matched by phone, then by name.
+  function customerKey(o) {
+    const email = String(o.customerEmail || '').trim().toLowerCase();
+    if (email) return email;
+    const ph = phoneDigits(o.customerPhone);
+    return ph ? 'phone:' + ph : 'name:' + String(o.customerName || '').trim().toLowerCase();
+  }
+
+  // Groups orders into customers. Orders belong to the same customer when they share an
+  // email or a phone number, so a phone-only order joins the customer's email orders.
   function customers(orders) {
-    const map = new Map();
-    for (const o of orders) {
-      const key = String(o.customerEmail || '').trim().toLowerCase() || 'no-email:' + o.customerName;
-      if (!map.has(key)) map.set(key, { key, email: o.customerEmail, name: o.customerName, orders: [], total: 0, last: 0 });
-      const c = map.get(key);
+    const byEmail = new Map(), byPhone = new Map(), byName = new Map();
+    const groups = [];
+    const sorted = [...orders].sort((a, b) => a.createdAt - b.createdAt);
+    const link = (c, o) => {
+      const e = String(o.customerEmail || '').trim().toLowerCase(), ph = phoneDigits(o.customerPhone);
+      if (e) byEmail.set(e, c);
+      if (ph) byPhone.set(ph, c);
+      if (!e && !ph) byName.set(String(o.customerName || '').trim().toLowerCase(), c);
+    };
+    for (const o of sorted) {
+      const e = String(o.customerEmail || '').trim().toLowerCase(), ph = phoneDigits(o.customerPhone);
+      const ce = e ? byEmail.get(e) : null, cp = ph ? byPhone.get(ph) : null;
+      let c = ce || cp || (!e && !ph ? byName.get(String(o.customerName || '').trim().toLowerCase()) : null);
+      if (ce && cp && ce !== cp) {
+        // This order links two customers: merge the second into the first.
+        cp.orders.forEach((x) => { ce.orders.push(x); link(ce, x); });
+        groups.splice(groups.indexOf(cp), 1);
+      }
+      if (!c) { c = { key: customerKey(o), orders: [] }; groups.push(c); }
       c.orders.push(o);
-      c.total += num(o.price);
-      if (o.createdAt > c.last) { c.last = o.createdAt; c.name = o.customerName; }
+      link(c, o);
     }
-    const list = [...map.values()];
-    list.forEach((c) => c.orders.sort((a, b) => b.createdAt - a.createdAt));
-    return list.sort((a, b) => b.last - a.last);
+    for (const c of groups) {
+      c.orders.sort((a, b) => b.createdAt - a.createdAt);
+      const latest = c.orders[0];
+      c.name = latest.customerName;
+      c.email = (c.orders.find((x) => x.customerEmail) || {}).customerEmail || '';
+      c.phone = (c.orders.find((x) => x.customerPhone) || {}).customerPhone || '';
+      c.last = latest.createdAt;
+      c.total = c.orders.filter((x) => x.status !== 'cancelled').reduce((s, x) => s + num(x.price), 0);
+    }
+    return groups.sort((a, b) => b.last - a.last);
+  }
+
+  function customerOf(orders, o) {
+    return customers(orders).find((c) => c.orders.includes(o)) || null;
   }
 
   async function hashPasscode(passcode, salt) {
@@ -215,8 +327,8 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
   }
 
   window.OT = {
-    STATUSES, uid, emptyDB, migrate, money, num, coloursFor, deliveryOptions, deliveryText,
+    customerOf, paymentSchedule, paymentText, STATUSES, CANCELLED, statusInfo, isOpen, phoneDigits, validatePhone, customerKey, uid, emptyDB, migrate, money, num, coloursFor, deliveryOptions, deliveryText,
     csPrice, parseGames, hackPrice, validateSerial, nextOrderId, statusLabel, orderLines,
-    buildStatusEmail, customers, hashPasscode, esc, guessSwatch
+    buildStatusEmail, customers, hashPasscode, esc, guessSwatch, discountAmount, discountText, applyDiscount
   };
 })();

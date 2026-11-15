@@ -44,7 +44,10 @@
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
     box: '<path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5v-9z"/><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"/>',
     download: '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',
-    upload: '<path d="M12 20V9M7 13.5l5-5 5 5M5 4h14"/>'
+    upload: '<path d="M12 20V9M7 13.5l5-5 5 5M5 4h14"/>',
+    phone: '<path d="M5 3.5h3.2l1.6 4.2-2.1 1.4a11 11 0 0 0 5.2 5.2l1.4-2.1 4.2 1.6v3.2a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 3 5.7a2 2 0 0 1 2-2.2z"/>',
+    minus: '<path d="M5 12h14"/>',
+    tag: '<path d="M3 12V4.5A1.5 1.5 0 0 1 4.5 3H12l9 9-9 9-9-9z"/><circle cx="7.5" cy="7.5" r="1.5"/>'
   };
   const icon = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
   const MARK = `<svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="#FFFDF9"/><rect x="0.5" y="0.5" width="63" height="63" rx="14.5" fill="none" stroke="#E6DDCE"/><rect x="13" y="15" width="38" height="9" rx="4.5" fill="#1A1D29"/><circle cx="17.5" cy="19.5" r="2.6" fill="#FF6B5A"/><rect x="13" y="27.5" width="38" height="9" rx="4.5" fill="#FF6B5A"/><circle cx="17.5" cy="32" r="2.6" fill="#FFFDF9"/><rect x="13" y="40" width="27" height="9" rx="4.5" fill="#F5A524"/><circle cx="17.5" cy="44.5" r="2.6" fill="#FFFDF9"/></svg>`;
@@ -78,6 +81,8 @@
   const pill = (status) => `<span class="pill s-${esc(status)}">${esc(OT.statusLabel(status))}</span>`;
   const bizChip = (b) => `<span class="bizchip ${b}"><i></i>${esc(bizName(b))}</span>`;
   const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  const contactLine = (o) => [o.customerEmail, o.customerPhone].filter(Boolean).join(' \u00B7 ');
+  const custKey = (o) => { const c = OT.customerOf(DB.orders, o); return c ? c.key : OT.customerKey(o); };
   const initials = (name) => String(name || '?').trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || '?';
   const hash = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
   const avatar = (name, key, lg) => `<span class="avatar av${hash(key || name) % 5}${lg ? ' lg' : ''}">${esc(initials(name))}</span>`;
@@ -212,7 +217,7 @@
     if (!$('#count-cs')) return;
     for (const b of ['cs', 'hack']) {
       $('#nm-' + b).textContent = bizName(b);
-      const open = DB.orders.filter((o) => o.business === b && o.status !== 'delivered').length;
+      const open = DB.orders.filter((o) => o.business === b && OT.isOpen(o)).length;
       $('#count-' + b).textContent = open || '';
     }
     $('#count-cust').textContent = OT.customers(DB.orders).length || '';
@@ -249,9 +254,9 @@
   function renderList(biz) {
     const st = listState[biz];
     const all = DB.orders.filter((o) => o.business === biz).sort((a, b) => b.createdAt - a.createdAt);
-    const counts = Object.fromEntries(OT.STATUSES.map((s) => [s.id, all.filter((o) => o.status === s.id).length]));
-    const active = all.filter((o) => o.status !== 'delivered');
-    const revenue = all.reduce((s, o) => s + num(o.price), 0);
+    const counts = Object.fromEntries([...OT.STATUSES, OT.CANCELLED].map((s) => [s.id, all.filter((o) => o.status === s.id).length]));
+    const active = all.filter(OT.isOpen);
+    const revenue = all.filter((o) => o.status !== 'cancelled').reduce((s, o) => s + num(o.price), 0);
     const lede = all.length
       ? `${active.length} open order${active.length === 1 ? '' : 's'}${counts.pending ? `, ${counts.pending} waiting to be confirmed` : ''}.`
       : 'No orders yet.';
@@ -272,9 +277,10 @@
           <div class="tabs" role="tablist">
             <button data-tab="active">Open<span class="count">${active.length}</span></button>
             ${OT.STATUSES.map((s) => `<button data-tab="${s.id}">${s.label}<span class="count">${counts[s.id]}</span></button>`).join('')}
+            ${counts.cancelled ? `<button data-tab="cancelled">Cancelled<span class="count">${counts.cancelled}</span></button>` : ''}
             <button data-tab="all">All<span class="count">${all.length}</span></button>
           </div>
-          <div class="filterbox">${icon('search')}<input type="text" id="listQ" placeholder="Filter by name, email, serial" value="${esc(st.q)}"></div>
+          <div class="filterbox">${icon('search')}<input type="text" id="listQ" placeholder="Filter by name, email, phone, serial" value="${esc(st.q)}"></div>
         </div>
         <div id="listBody"></div>
       </div>`;
@@ -283,7 +289,7 @@
       $$('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === st.tab));
       const q = st.q.trim().toLowerCase();
       let shown = st.tab === 'all' ? all : st.tab === 'active' ? active : all.filter((o) => o.status === st.tab);
-      if (q) shown = shown.filter((o) => [o.customerName, o.customerEmail, o.serial, o.orderId, o.colourName, o.donor, o.model].some((v) => String(v || '').toLowerCase().includes(q)));
+      if (q) shown = shown.filter((o) => [o.customerName, o.customerEmail, o.customerPhone, o.serial, o.orderId, o.colourName, o.donor, o.model, o.notes].some((v) => String(v || '').toLowerCase().includes(q)));
       $('#listBody').innerHTML = shown.length ? orderTable(shown, false) : emptyState(all.length, biz, q);
     };
     $$('[data-tab]').forEach((b) => b.onclick = () => { st.tab = b.dataset.tab; draw(); });
@@ -307,7 +313,7 @@
         const last = o.history && o.history.length ? o.history[o.history.length - 1].at : o.createdAt;
         return `<tr data-open="${o.id}">
         <td><b>${esc(o.orderId)}</b><span class="sub mono">${showBiz ? `${esc(bizName(o.business))}, ` : ''}${esc(o.serial)}</span></td>
-        <td><div class="person">${avatar(o.customerName, (o.customerEmail || '').toLowerCase())}<div><b>${esc(o.customerName)}</b><span class="sub hide-sm">${esc(o.customerEmail)}</span></div></div></td>
+        <td><div class="person">${avatar(o.customerName, custKey(o))}<div><b>${esc(o.customerName)}</b><span class="sub hide-sm">${esc(contactLine(o))}</span></div></div></td>
         <td class="hide-sm">${itemCell(o)}</td>
         <td class="r num"><b>${money(o.price)}</b></td>
         <td>${pill(o.status)}</td>
@@ -326,12 +332,14 @@
   }
 
   function customerSection(n) {
-    const known = OT.customers(DB.orders).filter((c) => c.email);
-    return section(n, 'Customer', 'Start typing to reuse an existing customer.', `<div class="grid">
-      ${field('f_name', 'Name', `<input type="text" id="f_name" list="dl_names" autocomplete="off" placeholder="Full name">`)}
-      ${field('f_email', 'Email', `<input type="email" id="f_email" list="dl_emails" autocomplete="off" placeholder="name@example.com">`, 'Status updates are sent here.')}
+    const known = OT.customers(DB.orders);
+    return section(n, 'Customer', 'Enter an email, a phone number, or both. Start typing to reuse an existing customer.', `<div class="grid">
+      ${field('f_name', 'Name', `<input type="text" id="f_name" list="dl_names" autocomplete="off" placeholder="Full name">`, null, 'full')}
+      ${field('f_email', 'Email', `<input type="email" id="f_email" list="dl_emails" autocomplete="off" placeholder="name@example.com">`, 'Needed for status update emails.')}
+      ${field('f_phone', 'Phone', `<input type="tel" id="f_phone" list="dl_phones" autocomplete="off" placeholder="07700 900123">`, 'Optional if you have an email.')}
       <datalist id="dl_names">${known.map((c) => `<option value="${esc(c.name)}">`).join('')}</datalist>
-      <datalist id="dl_emails">${known.map((c) => `<option value="${esc(c.email)}">${esc(c.name)}</option>`).join('')}</datalist>
+      <datalist id="dl_emails">${known.filter((c) => c.email).map((c) => `<option value="${esc(c.email)}">${esc(c.name)}</option>`).join('')}</datalist>
+      <datalist id="dl_phones">${known.filter((c) => c.phone).map((c) => `<option value="${esc(c.phone)}">${esc(c.name)}</option>`).join('')}</datalist>
     </div>`);
   }
 
@@ -345,14 +353,22 @@
 
   function wireCommon(biz, onChange) {
     const known = OT.customers(DB.orders);
-    const name = $('#f_name'), email = $('#f_email'), serial = $('#f_serial'), oid = $('#f_orderId');
-    name.addEventListener('change', () => {
-      const c = known.find((k) => k.name.toLowerCase() === name.value.trim().toLowerCase());
-      if (c && !email.value) { email.value = c.email; onChange(); }
+    const name = $('#f_name'), email = $('#f_email'), phone = $('#f_phone'), serial = $('#f_serial'), oid = $('#f_orderId');
+    const fill = (c) => {
+      if (!c) return;
+      if (!name.value) name.value = c.name;
+      if (!email.value && c.email) email.value = c.email;
+      if (!phone.value && c.phone) phone.value = c.phone;
+      ['f_email', 'f_phone'].forEach((id) => setErr(id, ''));
+      onChange();
+    };
+    name.addEventListener('change', () => fill(known.find((k) => k.name.toLowerCase() === name.value.trim().toLowerCase())));
+    phone.addEventListener('change', () => {
+      const d = OT.phoneDigits(phone.value);
+      if (d) fill(known.find((k) => k.phone && OT.phoneDigits(k.phone) === d));
     });
     email.addEventListener('change', () => {
-      const c = known.find((k) => (k.email || '').toLowerCase() === email.value.trim().toLowerCase());
-      if (c && !name.value) { name.value = c.name; onChange(); }
+      fill(known.find((k) => k.email && k.email.toLowerCase() === email.value.trim().toLowerCase()));
     });
     const upper = (el) => { const p = el.selectionStart; el.value = el.value.toUpperCase().replace(el === serial ? /\s/g : /$^/, ''); el.setSelectionRange(p, p); };
     const prefix = biz === 'cs' ? 'CS' : 'HC';
@@ -373,6 +389,7 @@
     const wrap = $(`[data-field="${id}"]`);
     if (!wrap) return;
     const e = $('.err', wrap);
+    if (!e) return;
     e.innerHTML = msg ? `${icon('info', 'sm')}${esc(msg)}` : '';
     e.hidden = !msg;
     const input = $('input:not([type=radio]):not([type=checkbox]), select, textarea', wrap);
@@ -383,17 +400,20 @@
     const errs = {};
     const name = $('#f_name').value.trim();
     const email = $('#f_email').value.trim();
+    const phone = $('#f_phone').value.trim();
     const orderId = $('#f_orderId').value.trim().toUpperCase();
     const serial = $('#f_serial').value.trim().toUpperCase();
     if (!name) errs.f_name = 'Enter the customer name.';
-    if (!email) errs.f_email = 'Enter the customer email.';
-    else if (!isEmail(email)) errs.f_email = 'That does not look like a valid email address.';
+    if (!email && !phone) errs.f_email = 'Enter an email or a phone number (or both).';
+    else if (email && !isEmail(email)) errs.f_email = 'That does not look like a valid email address.';
+    const pErr = OT.validatePhone(phone);
+    if (pErr) errs.f_phone = pErr;
     if (!orderId) errs.f_orderId = 'Enter an order ID.';
     else if (DB.orders.some((o) => o.orderId.toUpperCase() === orderId)) errs.f_orderId = `${orderId} is already used by another order.`;
     const sErr = OT.validateSerial(serial, biz === 'cs' ? 'CS' : 'HC');
     if (sErr) errs.f_serial = sErr;
     else if (DB.orders.some((o) => o.serial.toUpperCase() === serial)) errs.f_serial = `${serial} is already used by another order.`;
-    return { errs, values: { customerName: name, customerEmail: email, orderId, serial } };
+    return { errs, values: { customerName: name, customerEmail: email, customerPhone: phone, orderId, serial } };
   }
 
   function showErrors(ids, errs) {
@@ -421,6 +441,72 @@
 
   const sumRow = (k, v) => `<div class="row"><span>${k}</span><span>${v || '<span class="empty-val">Not chosen</span>'}</span></div>`;
 
+  // ---------- Discounts (shared by the order forms and the order page) ----------
+  function discountPicker(current) {
+    const presets = S().discounts || [];
+    let sel = 'none';
+    let custom = { type: 'percent', value: '', label: '' };
+    if (current) {
+      const p = presets.find((x) => x.type === current.type && num(x.value) === num(current.value) && x.name === current.label);
+      if (p) sel = p.id;
+      else { sel = 'custom'; custom = { type: current.type, value: current.value, label: current.label || '' }; }
+    }
+    const tile = (value, title, sub) => `<label class="tile"><input type="radio" name="disc" value="${esc(value)}" ${sel === value ? 'checked' : ''}><span class="radio"></span><span class="t-main"><span class="t-title">${title}</span>${sub ? `<span class="t-sub">${sub}</span>` : ''}</span></label>`;
+    return `<div class="field" data-field="f_disc">
+      <div class="tiles discounts">
+        ${tile('none', 'No discount', 'Full price')}
+        ${presets.map((p) => tile(p.id, esc(p.name), esc(OT.discountText(p)))).join('')}
+        ${tile('custom', 'Custom', 'Percent or amount')}
+      </div>
+      <div class="disc-custom" id="discCustom" ${sel === 'custom' ? '' : 'hidden'}>
+        <select id="d_type" aria-label="Discount type">
+          <option value="percent" ${custom.type === 'percent' ? 'selected' : ''}>Percent off</option>
+          <option value="fixed" ${custom.type === 'fixed' ? 'selected' : ''}>Amount off (£)</option>
+        </select>
+        <input type="number" id="d_value" min="0" step="0.01" placeholder="${custom.type === 'fixed' ? '5.00' : '10'}" value="${esc(custom.value)}" aria-label="Discount value">
+        <input type="text" id="d_label" placeholder="Reason (optional), for example Returning customer" value="${esc(custom.label)}" aria-label="Discount reason">
+      </div>
+      <div class="err" hidden></div>
+    </div>`;
+  }
+
+  function readDiscount(root) {
+    const sel = ($('input[name=disc]:checked', root) || {}).value || 'none';
+    if (sel === 'none') return { d: null };
+    if (sel === 'custom') {
+      const type = $('#d_type', root).value;
+      const value = num($('#d_value', root).value);
+      const label = $('#d_label', root).value.trim();
+      if (!(value > 0)) return { err: 'Enter a discount above zero, or choose No discount.' };
+      if (type === 'percent' && value > 100) return { err: 'A percentage discount cannot be more than 100.' };
+      return { d: { type, value, label } };
+    }
+    const p = (S().discounts || []).find((x) => x.id === sel);
+    return { d: p ? { type: p.type, value: num(p.value), label: p.name } : null };
+  }
+
+  function wireDiscount(root, onChange) {
+    root.addEventListener('change', (e) => {
+      if (e.target.name === 'disc') {
+        $('#discCustom', root).hidden = e.target.value !== 'custom';
+        if (e.target.value === 'custom') $('#d_value', root).focus();
+      }
+      if (e.target.id === 'd_type') $('#d_value', root).placeholder = e.target.value === 'fixed' ? '5.00' : '10';
+      if (onChange) onChange();
+    });
+    root.addEventListener('input', (e) => { if (e.target.id === 'd_value' || e.target.id === 'd_label') { setErr('f_disc', ''); if (onChange) onChange(); } });
+  }
+
+  // Summary rows and total for a subtotal with whatever discount is currently picked.
+  function discountSummary(subtotal, root) {
+    const r = readDiscount(root);
+    const amt = r.d ? OT.discountAmount(subtotal, r.d) : 0;
+    const rows = amt > 0
+      ? sumRow('Subtotal', money(subtotal)) + sumRow('Discount', `<span class="disc-val">-${money(amt)}</span>`)
+      : '';
+    return { rows, total: subtotal - amt };
+  }
+
   // The summary shell (with its buttons) is rendered once; only its contents update,
   // so a click on Create order is never lost to a re-render triggered by blur/change.
   function summaryCard(biz, rowsHtml, total, totalLbl) {
@@ -441,6 +527,82 @@
     $('#sumAmt').textContent = money(total);
   }
 
+  // ---------- Payment (shared by the order forms and the order page) ----------
+  const todayStr = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+
+  function paymentPicker(cur) {
+    const fin = cur && cur.method === 'finance';
+    const freq = fin ? cur.frequency : 'monthly';
+    const count = fin ? cur.count : 3;
+    const start = fin && cur.start ? cur.start : todayStr();
+    const tile = (value, title, sub, checked) => `<label class="tile"><input type="radio" name="pay" value="${value}" ${checked ? 'checked' : ''}><span class="radio"></span><span class="t-main"><span class="t-title">${title}</span><span class="t-sub">${sub}</span></span></label>`;
+    return `<div class="field" data-field="f_pay">
+      <div class="tiles paymethod">
+        ${tile('upfront', 'Pay upfront', 'The full amount in one payment', !fin)}
+        ${tile('finance', 'Finance', 'Split into weekly or monthly payments', fin)}
+      </div>
+      <div class="finance" id="finBox" ${fin ? '' : 'hidden'}>
+        <div class="fin-grid">
+          <div><span class="flabel">How often</span>
+            <div class="seg" role="radiogroup">
+              <label><input type="radio" name="freq" value="weekly" ${freq === 'weekly' ? 'checked' : ''}><span>Weekly</span></label>
+              <label><input type="radio" name="freq" value="monthly" ${freq !== 'weekly' ? 'checked' : ''}><span>Monthly</span></label>
+            </div></div>
+          <div><span class="flabel">Number of payments</span>
+            <div class="stepper"><button type="button" data-step="-1" aria-label="Fewer payments">${icon('minus')}</button><input type="number" id="fin_count" min="2" max="52" value="${esc(count)}" aria-label="Number of payments"><button type="button" data-step="1" aria-label="More payments">${icon('plus')}</button></div></div>
+          <div><span class="flabel">First payment</span><input type="date" id="fin_start" value="${esc(start)}" aria-label="First payment date"></div>
+        </div>
+        <div class="fin-preview" id="finPreview"></div>
+      </div>
+      <div class="err" hidden></div>
+    </div>`;
+  }
+
+  function readPayment(root) {
+    const method = ($('input[name=pay]:checked', root) || {}).value || 'upfront';
+    if (method === 'upfront') return { p: { method: 'upfront', paid: false } };
+    const count = Math.round(num($('#fin_count', root).value));
+    const start = $('#fin_start', root).value;
+    const frequency = ($('input[name=freq]:checked', root) || {}).value || 'monthly';
+    if (count < 2 || count > 52) return { err: 'Choose between 2 and 52 payments.' };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return { err: 'Choose the date of the first payment.' };
+    return { p: { method: 'finance', frequency, count, start, paid: [] } };
+  }
+
+  function drawFinancePreview(root, total) {
+    const box = $('#finPreview', root);
+    if (!box || $('#finBox', root).hidden) return;
+    const r = readPayment(root);
+    if (r.err) { box.innerHTML = `<span class="muted">${esc(r.err)}</span>`; return; }
+    if (!(total > 0)) { box.innerHTML = '<span class="muted">Choose the product above to see the payment amounts.</span>'; return; }
+    const sched = OT.paymentSchedule({ price: total, payment: r.p });
+    const shown = sched.slice(0, 6);
+    box.innerHTML = `<div class="fin-head"><b>${sched.length} ${r.p.frequency} payments of ${money(sched[0].amount)}</b><span>Last payment ${fmtDate(sched[sched.length - 1].due)}</span></div>
+      <ol class="fin-list">${shown.map((x) => `<li><span>${fmtDate(x.due)}</span><span class="num">${money(x.amount)}</span></li>`).join('')}${sched.length > shown.length ? `<li class="more">and ${sched.length - shown.length} more</li>` : ''}</ol>`;
+  }
+
+  function wirePayment(root, getTotal, onChange) {
+    const refresh = () => { drawFinancePreview(root, getTotal()); if (onChange) onChange(); };
+    root.addEventListener('change', (e) => {
+      if (e.target.name === 'pay') $('#finBox', root).hidden = e.target.value !== 'finance';
+      if (['pay', 'freq'].includes(e.target.name) || ['fin_count', 'fin_start'].includes(e.target.id)) { setErr('f_pay', ''); refresh(); }
+    });
+    root.addEventListener('input', (e) => { if (e.target.id === 'fin_count') refresh(); });
+    $$('[data-step]', root).forEach((b) => b.addEventListener('click', () => {
+      const inp = $('#fin_count', root);
+      inp.value = Math.min(52, Math.max(2, Math.round(num(inp.value)) + Number(b.dataset.step)));
+      refresh();
+    }));
+    drawFinancePreview(root, getTotal());
+  }
+
+  const payShort = (pay) => (!pay ? '' : pay.method === 'finance' ? `${pay.count} x ${pay.frequency}` : 'Upfront');
+
+  function notesSection(n) {
+    return section(n, 'Extra notes', 'Optional. Only you see these, they are never sent to the customer.',
+      `<div class="field" data-field="f_notes"><textarea id="f_notes" placeholder="Anything to remember about this order"></textarea></div>`);
+  }
+
   // ---------- ClearSense form ----------
   function renderCsForm() {
     const s = S().cs;
@@ -457,6 +619,9 @@
             <div class="field" data-field="f_colour" style="margin-top:18px"><span class="flabel">Colour</span><div id="colourBox"></div><div class="err" hidden></div></div>
             <div class="field" data-field="f_delivery" style="margin-top:18px"><span class="flabel">Delivery</span><div id="deliveryBox"></div><div class="err" hidden></div></div>`)}
           ${section(4, 'Options', 'Optional. Tick any that apply.', s.addons.length ? `<div class="tiles addons">${s.addons.map((a) => `<label class="tile"><input type="checkbox" name="addon" value="${a.id}"><span class="box">${icon('check')}</span><span class="t-main"><span class="t-title">${esc(a.name)}</span></span>${num(a.price) ? `<span class="t-price">+${money(a.price)}</span>` : ''}</label>`).join('')}</div>` : '<div class="placeholder-note">No options set up. Add them in Settings.</div>')}
+          ${section(5, 'Discount', 'Optional. Pick a saved discount or enter a custom one.', discountPicker(null))}
+          ${section(6, 'Payment', 'How the customer is paying.', paymentPicker(null))}
+          ${notesSection(7)}
         </form>
         <div id="sumSlot"></div>
       </div>`;
@@ -490,6 +655,7 @@
       const d = val('delivery');
       const price = OT.csPrice(S(), val('colour'), d, addons());
       const names = addons().map((id) => (s.addons.find((a) => a.id === id) || {}).name).filter(Boolean);
+      const disc = discountSummary(price || 0, $('#orderForm'));
       summaryCard('cs',
         sumRow('Customer', esc($('#f_name').value.trim())) +
         sumRow('Serial', $('#f_serial').value.length > 2 ? `<span class="mono">${esc($('#f_serial').value)}</span>` : '') +
@@ -497,11 +663,18 @@
         sumRow('Colour', c ? `${swatch(c.swatch)}${esc(c.name)}` : '') +
         sumRow('Delivery', d ? (d === 'express' ? 'Express' : 'Non express') : '') +
         sumRow('Options', names.length ? esc(names.join(', ')) : '<span class="empty-val">None</span>') +
-        sumRow('Installation', 'Included'),
-        price || 0, price == null ? 'Choose colour and delivery' : 'Total');
+        sumRow('Installation', 'Included') +
+        sumRow('Payment', esc(payShort(readPayment($('#orderForm')).p) || 'Check finance details')) +
+        (price == null ? '' : disc.rows),
+        price == null ? 0 : disc.total, price == null ? 'Choose colour and delivery' : 'Total');
     }
 
     wireCommon('cs', drawSummary);
+    wireDiscount($('#orderForm'), drawSummary);
+    const csTotal = () => discountSummary(OT.csPrice(S(), val('colour'), val('delivery'), addons()) || 0, $('#orderForm')).total;
+    wirePayment($('#orderForm'), csTotal);
+    $('#orderForm').addEventListener('change', () => drawFinancePreview($('#orderForm'), csTotal()));
+    $('#orderForm').addEventListener('input', (e) => { if (e.target.id === 'd_value') drawFinancePreview($('#orderForm'), csTotal()); });
     $('#orderForm').addEventListener('change', (e) => {
       if (e.target.name === 'model') drawColours();
       if (e.target.name === 'colour') drawDelivery();
@@ -515,16 +688,21 @@
       if (!val('model')) errs.f_model = 'Choose a BDM model.';
       if (!val('colour')) errs.f_colour = 'Choose a colour.';
       else if (!val('delivery')) errs.f_delivery = 'Choose a delivery type.';
-      if (!showErrors(['f_name', 'f_email', 'f_orderId', 'f_serial', 'f_model', 'f_colour', 'f_delivery'], errs)) return;
+      const disc = readDiscount($('#orderForm'));
+      if (disc.err) errs.f_disc = disc.err;
+      const pay = readPayment($('#orderForm'));
+      if (pay.err) errs.f_pay = pay.err;
+      if (!showErrors(['f_name', 'f_email', 'f_phone', 'f_orderId', 'f_serial', 'f_model', 'f_colour', 'f_delivery', 'f_disc', 'f_pay'], errs)) return;
       const c = s.colours.find((x) => x.id === val('colour'));
       const addonIds = addons();
-      createOrder({
+      createOrder(OT.applyDiscount({
         business: 'cs', ...values,
         model: val('model'), colourId: c.id, colourName: c.name, swatch: c.swatch,
         delivery: val('delivery'),
         addonIds, addonNames: addonIds.map((id) => (s.addons.find((a) => a.id === id) || {}).name).filter(Boolean),
-        price: OT.csPrice(S(), c.id, val('delivery'), addonIds)
-      });
+        price: OT.csPrice(S(), c.id, val('delivery'), addonIds),
+        payment: pay.p, notes: $('#f_notes').value.trim()
+      }, disc.d));
     };
   }
 
@@ -542,6 +720,9 @@
           ${section(4, 'Games', `${h.includedGames.length ? esc(h.includedGames.join(', ')) + ' are' : 'The base games are'} included in the ${money(h.basePrice)} base price.`, `
             <div class="tiles addons" style="margin-bottom:16px">${h.includedGames.map((g) => `<div class="tile" style="cursor:default;background:var(--surface-warm)"><span class="box" style="background:var(--ink);border-color:var(--ink)">${icon('check').replace('class="ic', 'style="opacity:1" class="ic')}</span><span class="t-main"><span class="t-title">${esc(g)}</span></span><span class="t-sub">Included</span></div>`).join('')}</div>
             ${field('f_games', 'Extra games', `<textarea id="f_games" placeholder="One game per line"></textarea>`, `One game per line, ${money(h.extraGamePrice)} each.`)}`)}
+          ${section(5, 'Discount', 'Optional. Pick a saved discount or enter a custom one.', discountPicker(null))}
+          ${section(6, 'Payment', 'How the customer is paying.', paymentPicker(null))}
+          ${notesSection(7)}
         </form>
         <div id="sumSlot"></div>
       </div>`;
@@ -549,15 +730,23 @@
     const games = $('#f_games');
     function drawSummary() {
       const extra = OT.parseGames(games.value);
+      const disc = discountSummary(OT.hackPrice(S(), extra), $('#orderForm'));
       summaryCard('hack',
         sumRow('Customer', esc($('#f_name').value.trim())) +
         sumRow('Serial', $('#f_serial').value.length > 2 ? `<span class="mono">${esc($('#f_serial').value)}</span>` : '') +
         sumRow('Calculator', esc($('#f_donor').value.trim())) +
         sumRow('Base price', money(h.basePrice)) +
-        sumRow(`Extra games (${extra.length})`, extra.length ? `${extra.length} x ${money(h.extraGamePrice)}` : '<span class="empty-val">None</span>'),
-        OT.hackPrice(S(), extra), 'Total');
+        sumRow(`Extra games (${extra.length})`, extra.length ? `${extra.length} x ${money(h.extraGamePrice)}` : '<span class="empty-val">None</span>') +
+        sumRow('Payment', esc(payShort(readPayment($('#orderForm')).p) || 'Check finance details')) +
+        disc.rows,
+        disc.total, 'Total');
     }
     wireCommon('hack', drawSummary);
+    wireDiscount($('#orderForm'), drawSummary);
+    const hackTotal = () => discountSummary(OT.hackPrice(S(), OT.parseGames(games.value)), $('#orderForm')).total;
+    wirePayment($('#orderForm'), hackTotal);
+    $('#orderForm').addEventListener('change', () => drawFinancePreview($('#orderForm'), hackTotal()));
+    $('#orderForm').addEventListener('input', (e) => { if (e.target.id === 'd_value' || e.target.id === 'f_games') drawFinancePreview($('#orderForm'), hackTotal()); });
     drawSummary();
     $('#f_name').focus();
     $('#orderForm').onsubmit = (e) => {
@@ -565,9 +754,13 @@
       const { errs, values } = validateCommon('hack');
       const donor = $('#f_donor').value.trim();
       if (!donor) errs.f_donor = 'Enter the donor calculator.';
-      if (!showErrors(['f_name', 'f_email', 'f_orderId', 'f_serial', 'f_donor'], errs)) return;
+      const disc = readDiscount($('#orderForm'));
+      if (disc.err) errs.f_disc = disc.err;
+      const pay = readPayment($('#orderForm'));
+      if (pay.err) errs.f_pay = pay.err;
+      if (!showErrors(['f_name', 'f_email', 'f_phone', 'f_orderId', 'f_serial', 'f_donor', 'f_disc', 'f_pay'], errs)) return;
       const extraGames = OT.parseGames(games.value);
-      createOrder({ business: 'hack', ...values, donor, includedGames: [...h.includedGames], extraGames, price: OT.hackPrice(S(), extraGames) });
+      createOrder(OT.applyDiscount({ business: 'hack', ...values, donor, includedGames: [...h.includedGames], extraGames, price: OT.hackPrice(S(), extraGames), payment: pay.p, notes: $('#f_notes').value.trim() }, disc.d));
     };
   }
 
@@ -578,6 +771,7 @@
   }
 
   async function sendStatusEmail(order) {
+    if (!order.customerEmail) { toast('This customer has no email address. Add one with Edit on the order page.', true); return 'none'; }
     const msg = OT.buildStatusEmail(S(), order);
     if (emailReady()) {
       const res = await api.sendEmail(S().email, msg);
@@ -596,11 +790,15 @@
   function renderOrder() {
     const o = DB.orders.find((x) => x.id === route.id);
     if (!o) { go('cs'); return; }
-    const idx = OT.STATUSES.findIndex((s) => s.id === o.status);
+    const cancelled = o.status === 'cancelled';
+    const idx = OT.STATUSES.findIndex((s) => s.id === (cancelled ? (o.cancelledFrom || 'pending') : o.status));
+    const cancelEntry = cancelled ? [...o.history].reverse().find((h) => h.status === 'cancelled' && !h.note) : null;
     const reached = {};
-    o.history.forEach((h) => { reached[h.status] = h.at; });
-    const custOrders = DB.orders.filter((x) => (x.customerEmail || '').toLowerCase() === (o.customerEmail || '').toLowerCase()).length;
-    const details = OT.orderLines(S(), o).filter(([k]) => !['Order ID', 'Serial number', 'Price'].includes(k));
+    o.history.forEach((h) => { if (!h.note) reached[h.status] = h.at; });
+    const custOrders = DB.orders.filter((x) => custKey(x) === custKey(o)).length;
+    const details = OT.orderLines(S(), o).filter(([k]) => !['Order ID', 'Serial number', 'Price', 'Subtotal', 'Discount', 'Payment'].includes(k));
+    const hasDisc = !!(o.discount && o.discount.amount > 0);
+    const discWhy = hasDisc ? (o.discount.label ? `${o.discount.label}, ${OT.discountText(o.discount)}` : OT.discountText(o.discount)) : '';
     const priceNote = o.business === 'cs' ? 'Installation included' : `${(o.extraGames || []).length} extra game${(o.extraGames || []).length === 1 ? '' : 's'}`;
 
     main.innerHTML = `
@@ -612,9 +810,10 @@
             <h1>${esc(o.orderId)}</h1>
             <div class="meta"><span class="chip mono">${esc(o.serial)}</span><span>Created ${fmtDateTime(o.createdAt)}</span></div>
           </div>
-          <div class="price"><div class="amt">${money(o.price)}</div><div class="lbl">${esc(priceNote)}</div></div>
+          <div class="price">${hasDisc ? `<div class="was">${money(o.subtotal)}</div>` : ''}<div class="amt">${money(o.price)}</div><div class="lbl">${hasDisc ? `<span class="disc-val">${esc(discWhy)}</span>` : esc(priceNote)}</div></div>
         </div>
-        <div class="tracker">${OT.STATUSES.map((s, i) => `<button class="tstep ${i < idx ? 'done' : ''} ${i === idx ? 'current' : ''}" data-status="${s.id}" title="${i === idx ? 'Current status' : `Mark as ${s.label}`}">
+        ${cancelled ? `<div class="cancel-banner">${icon('x')}<div><b>This order was cancelled${cancelEntry ? ` on ${fmtDate(cancelEntry.at)}` : ''}.</b><span>It stays on record but is left out of open orders and totals.</span></div><button class="btn sm" data-action="reopenOrder">Reopen order</button></div>` : ''}
+        <div class="tracker${cancelled ? ' is-cancelled' : ''}">${OT.STATUSES.map((s, i) => `<button ${cancelled ? 'disabled ' : ''}class="tstep ${i < idx ? 'done' : ''} ${i === idx ? 'current' : ''}" data-status="${s.id}" title="${i === idx ? 'Current status' : `Mark as ${s.label}`}">
           <span class="rail"><span class="node">${i < idx ? icon('check') : i + 1}</span></span>
           <span class="tl">${s.label}</span>
           <span class="tw">${i <= idx && reached[s.id] ? ago(reached[s.id]) : ''}</span></button>`).join('')}</div>
@@ -628,10 +827,14 @@
             </div>
           </section>
           <section class="card">
+            <div class="card-head"><h2>Extra notes</h2><button class="btn sm" data-action="editNotes">${icon('edit')}${o.notes ? 'Edit' : 'Add notes'}</button></div>
+            <div class="card-pad" style="padding-top:12px">${o.notes ? `<div class="notes-text">${esc(o.notes)}</div>` : '<p class="muted" style="margin:0;font-size:13.5px">No notes yet. Notes are private and never sent to the customer.</p>'}</div>
+          </section>
+          <section class="card">
             <div class="card-head"><h2>Activity</h2><span class="meta">${o.history.length} update${o.history.length === 1 ? '' : 's'}</span></div>
             <div class="card-pad">
               <ul class="activity">${[...o.history].reverse().map((h) => `<li><span class="dot"></span><div>
-                <b>${h === o.history[0] ? 'Order created' : `Marked as ${esc(OT.statusLabel(h.status))}`}</b>${EMAIL_NOTE[h.email] ? `<span class="mail">${icon('mail')}${EMAIL_NOTE[h.email]}</span>` : ''}
+                <b>${h === o.history[0] ? 'Order created' : h.note ? esc(h.note) : h.status === 'cancelled' ? 'Order cancelled' : `Marked as ${esc(OT.statusLabel(h.status))}`}</b>${EMAIL_NOTE[h.email] ? `<span class="mail">${icon('mail')}${EMAIL_NOTE[h.email]}</span>` : ''}
                 <div class="when">${fmtDateTime(h.at)}</div></div></li>`).join('')}</ul>
             </div>
           </section>
@@ -640,25 +843,111 @@
           <section class="card">
             <div class="card-head"><h2>Customer</h2><button class="btn sm" data-action="editContact">${icon('edit')}Edit</button></div>
             <div class="card-pad">
-              <div class="custcard">${avatar(o.customerName, (o.customerEmail || '').toLowerCase(), true)}<div style="min-width:0"><b>${esc(o.customerName)}</b><span class="sub">${esc(o.customerEmail)}</span></div></div>
+              <div class="custcard">${avatar(o.customerName, custKey(o), true)}<div style="min-width:0"><b>${esc(o.customerName)}</b>
+                ${o.customerEmail ? `<span class="contact">${icon('mail', 'sm')}${esc(o.customerEmail)}</span>` : ''}
+                ${o.customerPhone ? `<span class="contact">${icon('phone', 'sm')}${esc(o.customerPhone)}</span>` : ''}</div></div>
               <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
                 <button class="btn sm" data-action="viewCustomer">${icon('users')}${custOrders} order${custOrders === 1 ? '' : 's'} in total</button>
               </div>
             </div>
           </section>
           <section class="card">
+            <div class="card-head"><h2>Price</h2><button class="btn sm" data-action="editDiscount">${icon('tag')}${hasDisc ? 'Change discount' : 'Add discount'}</button></div>
+            <div class="card-pad" style="padding-top:8px">
+              <dl class="dl">
+                ${hasDisc ? `<dt>Subtotal</dt><dd class="num">${money(o.subtotal)}</dd><dt>Discount</dt><dd><span class="disc-val num">-${money(o.discount.amount)}</span><span class="muted" style="font-weight:500">${esc(discWhy)}</span></dd>` : ''}
+                <dt>Total</dt><dd class="num" style="font-size:16px">${money(o.price)}</dd>
+              </dl>
+            </div>
+          </section>
+          ${paymentCard(o)}
+          <section class="card">
             <div class="card-head"><h2>Notify customer</h2></div>
             <div class="card-pad" style="display:grid;gap:12px">
               <p class="muted" style="margin:0;font-size:13.5px">Each status change asks whether to email the customer. You can also resend the current status at any time.</p>
-              <button class="btn block" data-action="resend">${icon('send')}Email current status</button>
-              ${emailReady() ? '' : `<div class="callout">${icon('info')}<div>Direct sending is not set up, so emails open in your mail app. <button class="linkbtn" data-nav="settings">Set up email</button></div></div>`}
+              <button class="btn block" data-action="resend" ${o.customerEmail ? '' : 'disabled'}>${icon('send')}Email current status</button>
+              ${!o.customerEmail ? `<div class="callout">${icon('info')}<div>No email address on this order${o.customerPhone ? `, so contact the customer on ${esc(o.customerPhone)}` : ''}. <button class="linkbtn" data-action="editContact">Add an email</button></div></div>` : emailReady() ? '' : `<div class="callout">${icon('info')}<div>Direct sending is not set up, so emails open in your mail app. <button class="linkbtn" data-nav="settings">Set up email</button></div></div>`}
             </div>
           </section>
-          <section class="card danger-row"><p>Remove this order permanently.</p><button class="btn sm danger" data-action="deleteOrder">${icon('trash')}Delete</button></section>
+          <section class="card">
+            <div class="card-head"><h2>Manage order</h2></div>
+            <div class="card-pad manage">
+              ${cancelled
+                ? `<div class="manage-row"><div><b>Reopen order</b><span>Put it back to ${esc(OT.statusLabel(o.cancelledFrom || 'pending'))}.</span></div><button class="btn sm" data-action="reopenOrder">Reopen</button></div>`
+                : `<div class="manage-row"><div><b>Cancel order</b><span>Keeps it on record as Cancelled. You can reopen it later.</span></div><button class="btn sm" data-action="cancelOrder">${icon('x')}Cancel order</button></div>`}
+              <div class="manage-row"><div><b>Delete permanently</b><span>Removes the order completely. This cannot be undone.</span></div><button class="btn sm danger" data-action="deleteOrder">${icon('trash')}Delete</button></div>
+            </div>
+          </section>
         </div>
       </div>`;
 
     $$('[data-status]').forEach((b) => b.onclick = () => changeStatus(o, b.dataset.status));
+    $$('[data-inst]').forEach((cb) => cb.onchange = async () => {
+      const i = Number(cb.dataset.inst);
+      o.payment.paid = o.payment.paid || [];
+      o.payment.paid[i] = cb.checked;
+      await persist(cb.checked ? `Payment ${i + 1} marked as paid` : `Payment ${i + 1} marked as unpaid`);
+      renderOrder();
+    });
+  }
+
+  function paymentCard(o) {
+    const pay = o.payment || { method: 'upfront', paid: false };
+    const head = `<div class="card-head"><h2>Payment</h2><button class="btn sm" data-action="editPayment">${icon('edit')}Change</button></div>`;
+    if (pay.method !== 'finance') {
+      return `<section class="card">${head}<div class="card-pad pay-up">
+        <div><b>Pay upfront</b><span class="sub">${money(o.price)} in one payment</span></div>
+        ${pay.paid ? `<span class="pill s-delivered">Paid</span>` : `<span class="pill s-pending">Not paid</span>`}
+        <button class="btn sm ${pay.paid ? 'ghost' : 'dark'}" data-action="toggleUpfront">${pay.paid ? 'Mark as not paid' : `${icon('check')}Mark as paid`}</button>
+      </div></section>`;
+    }
+    const sched = OT.paymentSchedule(o);
+    const paidSum = sched.filter((x) => x.paid).reduce((a, x) => a + x.amount, 0);
+    const paidCount = sched.filter((x) => x.paid).length;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return `<section class="card">${head}<div class="card-pad" style="padding-top:12px">
+      <div class="fin-sum"><b>${sched.length} ${pay.frequency} payments</b><span>${paidCount} of ${sched.length} paid, ${money(Math.max(o.price - paidSum, 0))} left</span></div>
+      <div class="progress"><i style="width:${Math.round(paidCount / sched.length * 100)}%"></i></div>
+      <ul class="inst">${sched.map((x, i) => {
+        const late = !x.paid && x.due < today;
+        return `<li class="${x.paid ? 'paid' : ''}${late ? ' late' : ''}"><label><input type="checkbox" data-inst="${i}" ${x.paid ? 'checked' : ''}><span class="box">${icon('check')}</span>
+          <span class="i-main"><b>Payment ${x.n}</b><span>${late ? 'Overdue, was due ' : 'Due '}${fmtDate(x.due)}</span></span><span class="num i-amt">${money(x.amount)}</span></label></li>`;
+      }).join('')}</ul>
+    </div></section>`;
+  }
+
+  function editPayment(o) {
+    modal(`<div class="m-body"><h2>Payment for ${esc(o.orderId)}</h2><p>Total ${money(o.price)}.</p>
+      <div style="margin-top:16px" id="payRoot">${paymentPicker(o.payment)}</div></div>
+      <div class="m-foot"><button class="btn ghost" data-close>Cancel</button><button class="btn dark" id="okBtn">Save payment</button></div>`, (m, close) => {
+      const root = $('#payRoot', m);
+      wirePayment(root, () => o.price);
+      $('#okBtn', m).onclick = async () => {
+        const r = readPayment(root);
+        if (r.err) { setErr('f_pay', r.err); return; }
+        const old = o.payment || {};
+        if (r.p.method === 'finance' && old.method === 'finance') r.p.paid = (old.paid || []).slice(0, r.p.count);
+        if (r.p.method === 'upfront' && old.method === 'upfront') r.p.paid = !!old.paid;
+        o.payment = r.p;
+        o.history.push({ status: o.status, at: Date.now(), email: 'none', note: `Payment changed to ${r.p.method === 'finance' ? `finance, ${r.p.count} ${r.p.frequency} payments` : 'upfront'}` });
+        close();
+        await persist('Payment updated');
+        renderOrder();
+      };
+    }, o.business);
+  }
+
+  function editNotes(o) {
+    modal(`<div class="m-body"><h2>Extra notes</h2><p>Only you see these. They are never sent to the customer.</p>
+      <textarea id="n_text" style="margin-top:16px;min-height:160px" placeholder="Anything to remember about this order">${esc(o.notes || '')}</textarea></div>
+      <div class="m-foot"><button class="btn ghost" data-close>Cancel</button><button class="btn dark" id="okBtn">Save notes</button></div>`, (m, close) => {
+      $('#okBtn', m).onclick = async () => {
+        o.notes = $('#n_text', m).value.trim();
+        close();
+        await persist('Notes saved');
+        renderOrder();
+      };
+    }, o.business);
   }
 
   function changeStatus(o, status) {
@@ -666,11 +955,10 @@
     const label = OT.statusLabel(status);
     modal(`<div class="m-body"><h2>Mark ${esc(o.orderId)} as ${esc(label)}?</h2>
       <p>${esc(OT.STATUSES.find((s) => s.id === status).line)}</p>
-      <label class="notify"><input type="checkbox" id="sendMail" checked><div><b>${emailReady() ? 'Email the customer' : 'Write an email to the customer'}</b>
-        <span>${emailReady() ? `Sends the update to ${esc(o.customerEmail)}` : `Opens a ready-written email to ${esc(o.customerEmail)} in your mail app`}</span></div></label></div>
+      ${notifyBox(o)}</div>
       <div class="m-foot"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" id="okBtn">Mark as ${esc(label)}</button></div>`, (m, close) => {
       $('#okBtn', m).onclick = async () => {
-        const send = $('#sendMail', m).checked;
+        const send = !!($('#sendMail', m) || {}).checked;
         close();
         o.status = status;
         const entry = { status, at: Date.now(), email: 'none' };
@@ -686,19 +974,92 @@
     }, o.business);
   }
 
+  function notifyBox(o) {
+    if (!o.customerEmail) {
+      return `<div class="notify" style="cursor:default"><span style="color:var(--ink-3);margin-top:1px">${icon('info', 'sm')}</span><div><b>No email on this order</b>
+        <span>${o.customerPhone ? `Let the customer know on ${esc(o.customerPhone)}.` : 'Add an email with Edit to send updates.'}</span></div></div>`;
+    }
+    return `<label class="notify"><input type="checkbox" id="sendMail" checked><div><b>${emailReady() ? 'Email the customer' : 'Write an email to the customer'}</b>
+      <span>${emailReady() ? `Sends the update to ${esc(o.customerEmail)}` : `Opens a ready-written email to ${esc(o.customerEmail)} in your mail app`}</span></div></label>`;
+  }
+
+  function cancelOrder(o) {
+    modal(`<div class="m-body"><h2>Cancel ${esc(o.orderId)}?</h2>
+      <p>The order stays on record as Cancelled and is left out of open orders and totals. You can reopen it later.</p>
+      ${notifyBox(o)}</div>
+      <div class="m-foot"><button class="btn ghost" data-close>Keep order</button><button class="btn danger" id="okBtn">${icon('x')}Cancel order</button></div>`, (m, close) => {
+      $('#okBtn', m).onclick = async () => {
+        const send = !!($('#sendMail', m) || {}).checked;
+        close();
+        o.cancelledFrom = o.status;
+        o.status = 'cancelled';
+        const entry = { status: 'cancelled', at: Date.now(), email: 'none' };
+        o.history.push(entry);
+        await persist(`${o.orderId} cancelled`);
+        renderOrder();
+        if (send) {
+          entry.email = await sendStatusEmail(o);
+          await persist();
+          if (route.page === 'order' && route.id === o.id) renderOrder();
+        }
+      };
+    }, o.business);
+  }
+
+  async function reopenOrder(o) {
+    const back = o.cancelledFrom || 'pending';
+    o.status = back;
+    delete o.cancelledFrom;
+    o.history.push({ status: back, at: Date.now(), email: 'none', note: `Order reopened as ${OT.statusLabel(back)}` });
+    await persist(`${o.orderId} reopened`);
+    renderOrder();
+  }
+
+  function editDiscount(o) {
+    const subtotal = o.subtotal != null ? o.subtotal : o.price;
+    modal(`<div class="m-body"><h2>Discount for ${esc(o.orderId)}</h2><p>Subtotal before discount: ${money(subtotal)}</p>
+      <div style="margin-top:16px" id="discRoot">${discountPicker(o.discount && o.discount.amount > 0 ? o.discount : null)}</div>
+      <div class="disc-preview"><span>New total</span><b id="discTotal"></b></div></div>
+      <div class="m-foot"><button class="btn ghost" data-close>Cancel</button><button class="btn dark" id="okBtn">Save discount</button></div>`, (m, close) => {
+      const root = $('#discRoot', m);
+      const update = () => {
+        const r = readDiscount(root);
+        $('#discTotal', m).textContent = r.err ? '...' : money(subtotal - (r.d ? OT.discountAmount(subtotal, r.d) : 0));
+      };
+      wireDiscount(root, update);
+      update();
+      $('#okBtn', m).onclick = async () => {
+        const r = readDiscount(root);
+        if (r.err) { setErr('f_disc', r.err); return; }
+        const before = JSON.stringify(o.discount || null);
+        OT.applyDiscount(o, r.d);
+        if (JSON.stringify(o.discount || null) !== before) {
+          o.history.push({ status: o.status, at: Date.now(), email: 'none', note: o.discount ? `Discount set: -${money(o.discount.amount)}` : 'Discount removed' });
+        }
+        close();
+        await persist(o.discount ? `Discount saved, new total ${money(o.price)}` : 'Discount removed');
+        renderOrder();
+      };
+    }, o.business);
+  }
+
   function editContact(o) {
     modal(`<div class="m-body"><h2>Edit customer</h2><p>Changes apply to this order only.</p>
       <div class="stack" style="margin-top:18px">
         <div class="field" data-field="e_name"><label for="e_name">Name</label><input type="text" id="e_name" value="${esc(o.customerName)}"><div class="err" hidden></div></div>
-        <div class="field" data-field="e_email"><label for="e_email">Email</label><input type="email" id="e_email" value="${esc(o.customerEmail)}"><div class="err" hidden></div></div>
+        <div class="field" data-field="e_email"><label for="e_email">Email</label><input type="email" id="e_email" value="${esc(o.customerEmail || '')}"><div class="err" hidden></div></div>
+        <div class="field" data-field="e_phone"><label for="e_phone">Phone</label><input type="tel" id="e_phone" value="${esc(o.customerPhone || '')}"><div class="hint">An email, a phone number, or both.</div><div class="err" hidden></div></div>
       </div></div>
       <div class="m-foot"><button class="btn ghost" data-close>Cancel</button><button class="btn dark" id="okBtn">Save changes</button></div>`, (m, close) => {
       $('#okBtn', m).onclick = async () => {
-        const name = $('#e_name', m).value.trim(), email = $('#e_email', m).value.trim();
+        const name = $('#e_name', m).value.trim(), email = $('#e_email', m).value.trim(), phone = $('#e_phone', m).value.trim();
+        const eErr = !email && !phone ? 'Enter an email or a phone number.' : email && !isEmail(email) ? 'Enter a valid email address.' : '';
+        const pErr = OT.validatePhone(phone) || '';
         setErr('e_name', name ? '' : 'Name is required.');
-        setErr('e_email', isEmail(email) ? '' : 'Enter a valid email address.');
-        if (!name || !isEmail(email)) return;
-        o.customerName = name; o.customerEmail = email;
+        setErr('e_email', eErr);
+        setErr('e_phone', pErr);
+        if (!name || eErr || pErr) return;
+        o.customerName = name; o.customerEmail = email; o.customerPhone = phone;
         close();
         await persist('Customer updated');
         renderOrder();
@@ -733,18 +1094,19 @@
       <div class="pagehead"><div><div class="crumb"><span class="bar"></span>Both businesses</div><h1>Customers</h1>
         <p class="lede">${all.length} customer${all.length === 1 ? '' : 's'}, ${money(total)} in orders.</p></div></div>
       <div class="card" style="overflow:hidden">
-        <div class="toolbar" style="padding:10px 16px"><div class="filterbox" style="padding:0;flex:1">${icon('search')}<input type="text" id="custSearch" placeholder="Search by name or email" value="${esc(customerQuery)}" style="width:100%;max-width:360px"></div></div>
+        <div class="toolbar" style="padding:10px 16px"><div class="filterbox" style="padding:0;flex:1">${icon('search')}<input type="text" id="custSearch" placeholder="Search by name, email or phone" value="${esc(customerQuery)}" style="width:100%;max-width:360px"></div></div>
         <div id="custList" class="custlist"></div>
       </div>`;
     const draw = () => {
       const q = customerQuery.trim().toLowerCase();
-      const list = q ? all.filter((c) => c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)) : all;
+      const qd = OT.phoneDigits(q);
+      const list = q ? all.filter((c) => c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q) || (qd.length >= 3 && OT.phoneDigits(c.phone).includes(qd))) : all;
       $('#custList').innerHTML = list.length ? list.map((c) => {
         const cs = c.orders.filter((o) => o.business === 'cs').length, hk = c.orders.length - cs;
-        const open = c.orders.filter((o) => o.status !== 'delivered').length;
+        const open = c.orders.filter(OT.isOpen).length;
         return `<details class="cust" data-key="${esc(c.key)}" ${openCustomer === c.key ? 'open' : ''}>
           <summary>
-            <div class="person">${avatar(c.name, c.key)}<div><b>${esc(c.name)}</b><span class="sub">${esc(c.email)}</span></div></div>
+            <div class="person">${avatar(c.name, c.key)}<div><b>${esc(c.name)}</b><span class="sub">${esc([c.email, c.phone].filter(Boolean).join(' \u00B7 '))}</span></div></div>
             <div class="bizes">${cs ? `<span class="bizchip cs"><i></i>${cs} ${esc(bizName('cs'))}</span>` : ''}${hk ? `<span class="bizchip hack"><i></i>${hk} ${esc(bizName('hack'))}</span>` : ''}</div>
             <div class="tot"><b>${money(c.total)}</b><span class="sub">${c.orders.length} order${c.orders.length === 1 ? '' : 's'}${open ? `, ${open} open` : ''}</span></div>
             <span class="chev">${icon('chev')}</span>
@@ -765,7 +1127,7 @@
   }
 
   const SETTINGS_SECTIONS = [
-    ['set-colours', 'Colours'], ['set-models', 'BDM models'], ['set-options', 'Options'], ['set-delivery', 'Delivery wording'],
+    ['set-colours', 'Colours'], ['set-models', 'BDM models'], ['set-options', 'Options'], ['set-discounts', 'Discounts'], ['set-delivery', 'Delivery wording'],
     ['set-hack', 'Hackulator'], ['set-email', 'Email'], ['set-general', 'Business names'], ['set-pass', 'Passcode'], ['set-data', 'Data and backup']
   ];
 
@@ -803,6 +1165,14 @@
           ${sset('set-options', `${esc(bizName('cs'))} options`, 'Optional add-ons on the order form. Give one a price above zero to add it to the total.', `
             ${s.cs.addons.map((a) => `<div class="addon-row" data-addon="${a.id}"><input type="text" data-af="name" value="${esc(a.name)}" aria-label="Option name">${priceInput('data-af="price" aria-label="Option price"', a.price)}<button class="iconbtn" data-action="delAddon" aria-label="Remove option">${icon('trash')}</button></div>`).join('')}
             <div class="addrow"><input type="text" id="newAddon" placeholder="New option, for example Keep original D-pad"><button class="btn" data-action="addAddon">${icon('plus')}Add option</button></div>`)}
+
+          ${sset('set-discounts', 'Saved discounts', `One-click discounts on both order forms. You can still enter a custom discount on any order. Changing these does not affect existing orders.`, `
+            ${(s.discounts || []).length ? s.discounts.map((d) => `<div class="disc-row" data-disc="${d.id}">
+              <input type="text" data-df="name" value="${esc(d.name)}" aria-label="Discount name">
+              <select data-df="type" aria-label="Discount type"><option value="percent" ${d.type === 'percent' ? 'selected' : ''}>Percent off</option><option value="fixed" ${d.type === 'fixed' ? 'selected' : ''}>Amount off (£)</option></select>
+              <input type="number" min="0" step="0.01" data-df="value" value="${esc(d.value)}" aria-label="Discount value">
+              <button class="iconbtn" data-action="delDisc" aria-label="Remove discount">${icon('trash')}</button></div>`).join('') : '<div class="placeholder-note">No saved discounts yet. Add one below, for example Returning customer, 10 percent off.</div>'}
+            <div class="addrow"><input type="text" id="newDisc" placeholder="New discount name, for example Returning customer"><button class="btn" data-action="addDisc">${icon('plus')}Add discount</button></div>`)}
 
           ${sset('set-delivery', 'Delivery wording', 'Shown on the order form, the order page and customer emails.', `<div class="grid">
             <div class="field"><label>Express</label><input type="text" data-set="cs.expressWording" value="${esc(s.cs.expressWording)}"></div>
@@ -888,8 +1258,21 @@
       }));
     });
 
+    $$('[data-disc]', main).forEach((row) => {
+      const d = s.discounts.find((x) => x.id === row.dataset.disc);
+      $$('[data-df]', row).forEach((el) => el.addEventListener('change', () => {
+        const f = el.dataset.df;
+        let v = f === 'value' ? num(el.value) : el.value.trim();
+        if (f === 'name' && !v) { el.value = d.name; toast('Discount name cannot be empty', true); return; }
+        if (f === 'value' && (v < 0 || (d.type === 'percent' && v > 100))) { el.value = d.value; toast('Percent discounts must be between 0 and 100', true); return; }
+        if (f === 'type' && v === 'percent' && num(d.value) > 100) { d.value = 100; $('[data-df=value]', row).value = 100; }
+        d[f] = v;
+        persist('Saved');
+      }));
+    });
+
     const enter = (id, action) => { const el = $(id); if (el) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); handleAction(action, el); } }); };
-    enter('#newColour', 'addColour'); enter('#newModel', 'addModel'); enter('#newAddon', 'addAddon'); enter('#smtpPass', 'savePass');
+    enter('#newColour', 'addColour'); enter('#newModel', 'addModel'); enter('#newAddon', 'addAddon'); enter('#newDisc', 'addDisc'); enter('#smtpPass', 'savePass');
   }
 
   async function settingsAction(action, el) {
@@ -940,6 +1323,18 @@
         const id = el.closest('[data-addon]').dataset.addon;
         s.cs.addons = s.cs.addons.filter((x) => x.id !== id);
         return reRender('Option removed');
+      }
+      case 'addDisc': {
+        const name = $('#newDisc').value.trim();
+        if (!name) return toast('Enter a discount name first', true);
+        if (!s.discounts) s.discounts = [];
+        s.discounts.push({ id: OT.uid(), name, type: 'percent', value: 10 });
+        return reRender(`Added ${name} at 10 percent off. Change the amount if needed.`, '#newDisc');
+      }
+      case 'delDisc': {
+        const id = el.closest('[data-disc]').dataset.disc;
+        s.discounts = s.discounts.filter((x) => x.id !== id);
+        return reRender('Discount removed');
       }
       case 'savePass': {
         const v = $('#smtpPass').value;
@@ -993,7 +1388,7 @@
       case 'openNav': return $('#shell').classList.add('nav-open');
       case 'closeNav': return $('#shell').classList.remove('nav-open');
       case 'resend':
-        if (order) {
+        if (order && order.customerEmail) {
           const r = await sendStatusEmail(order);
           order.history.push({ status: order.status, at: Date.now(), email: r === 'sent' ? 'resent' : r });
           await persist();
@@ -1001,11 +1396,23 @@
         }
         return;
       case 'editContact': return order && editContact(order);
+      case 'editDiscount': return order && editDiscount(order);
+      case 'cancelOrder': return order && cancelOrder(order);
+      case 'editPayment': return order && editPayment(order);
+      case 'editNotes': return order && editNotes(order);
+      case 'toggleUpfront':
+        if (order) {
+          order.payment = { method: 'upfront', paid: !(order.payment && order.payment.paid) };
+          await persist(order.payment.paid ? 'Marked as paid' : 'Marked as not paid');
+          renderOrder();
+        }
+        return;
+      case 'reopenOrder': return order && reopenOrder(order);
       case 'viewCustomer':
-        if (order) { customerQuery = order.customerEmail; openCustomer = (order.customerEmail || '').trim().toLowerCase(); go('customers'); }
+        if (order) { customerQuery = order.customerEmail || order.customerPhone || order.customerName; openCustomer = custKey(order); go('customers'); }
         return;
       case 'deleteOrder':
-        if (order && await confirmBox(`Delete ${order.orderId}?`, `The order for ${esc(order.customerName)} will be permanently deleted. This cannot be undone.`, 'Delete order', true)) {
+        if (order && await confirmBox(`Delete ${order.orderId}?`, `The order for ${esc(order.customerName)} will be removed completely, including its history. This cannot be undone. To keep a record instead, cancel the order.`, 'Delete permanently', true)) {
           DB.orders = DB.orders.filter((x) => x.id !== order.id);
           await persist('Order deleted');
           go(order.business);

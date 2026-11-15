@@ -538,3 +538,93 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
   .addon-row { grid-template-columns: minmax(0, 1fr) 96px 34px; }
   .toast { left: 16px; right: 16px; bottom: 16px; }
 }
+
+/* ---------- Discounts ---------- */
+.tiles.discounts { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.disc-custom { display: grid; grid-template-columns: 160px 110px minmax(0, 1fr); gap: 8px; margin-top: 12px; }
+.disc-val { color: var(--green); font-weight: 650; }
+.hero .price .was { font-size: 15px; color: var(--ink-3); text-decoration: line-through; font-variant-numeric: tabular-nums; }
+.disc-preview { display: flex; justify-content: space-between; align-items: baseline; margin-top: 18px; padding: 12px 14px; border-radius: 10px; background: var(--surface-warm); border: 1px solid var(--line); }
+.disc-preview span { color: var(--ink-3); font-size: 13.5px; }
+.disc-preview b { font-family: var(--head); font-size: 22px; font-weight: 560; font-variant-numeric: tabular-nums; }
+.disc-row { display: grid; grid-template-columns: minmax(0, 1fr) 160px 100px 34px; gap: 8px; align-items: center; }
+.disc-row + .disc-row { margin-top: 8px; }
+.modal .card:has(.tiles.discounts) { max-width: 560px; }
+@media (max-width: 760px) {
+  .disc-custom { grid-template-columns: minmax(0, 1fr) 100px; }
+  .disc-custom #d_label { grid-column: 1 / -1; }
+  .disc-row { grid-template-columns: minmax(0, 1fr) 90px 34px; }
+  .disc-row select { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* ---------- Contact, cancel, manage ---------- */
+.custcard .contact { display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 13px; overflow-wrap: anywhere; margin-top: 2px; }
+.custcard .contact .ic { width: 14px; height: 14px; flex: none; }
+.s-cancelled { background: var(--sunken); color: var(--ink-3); text-decoration: line-through; box-shadow: inset 0 0 0 1px var(--line); }
+.cancel-banner { display: flex; align-items: center; gap: 12px; margin: 22px 0 0; padding: 12px 14px; border-radius: 11px; background: var(--sunken); border: 1px solid var(--line); }
+.cancel-banner > .ic { color: var(--coral-ink); width: 18px; height: 18px; }
+.cancel-banner div { flex: 1; min-width: 0; }
+.cancel-banner b { display: block; font-size: 13.5px; }
+.cancel-banner span { font-size: 12.5px; color: var(--ink-3); }
+.tracker.is-cancelled { opacity: .45; filter: grayscale(1); }
+.tracker.is-cancelled .tstep { cursor: default; }
+.manage { display: grid; gap: 0; padding-top: 6px; }
+.manage-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.manage-row:first-child { border-top: 0; }
+.manage-row b { display: block; font-size: 13.5px; }
+.manage-row span { font-size: 12.5px; color: var(--ink-3); }
+
+/* ---------- Payment ---------- */
+.tiles.paymethod { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.finance { margin-top: 12px; padding: 16px; border-radius: 12px; background: var(--surface-warm); border: 1px solid var(--line); }
+.fin-grid { display: grid; grid-template-columns: auto auto minmax(150px, 1fr); gap: 16px; align-items: end; }
+.fin-grid input[type=date] { height: 40px; width: 100%; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 9px; background: #fff; outline: none; font: inherit; }
+.fin-grid input[type=date]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-100); }
+.seg { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--sunken); border: 1px solid var(--line); }
+.seg label { position: relative; cursor: pointer; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span { display: block; padding: 7px 14px; border-radius: 7px; font-weight: 600; font-size: 13.5px; color: var(--ink-3); transition: .12s; }
+.seg input:checked + span { background: #fff; color: var(--ink); box-shadow: var(--sh-1), inset 0 0 0 1px var(--line); }
+.seg input:focus-visible + span { box-shadow: 0 0 0 3px var(--accent-100); }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line-strong); border-radius: 10px; background: #fff; overflow: hidden; height: 40px; }
+.stepper button { width: 38px; height: 100%; border: 0; background: none; display: grid; place-items: center; color: var(--ink-2); }
+.stepper button:hover { background: var(--sunken); color: var(--ink); }
+.stepper button .ic { width: 15px; height: 15px; }
+.stepper input[type=number] { width: 56px; height: 100%; border: 0; border-left: 1px solid var(--line); border-right: 1px solid var(--line); border-radius: 0; text-align: center; font-weight: 650; box-shadow: none; padding: 0 4px; -moz-appearance: textfield; }
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper input:focus { box-shadow: none; background: var(--accent-50); }
+.fin-preview { margin-top: 14px; }
+.fin-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13.5px; }
+.fin-head span { color: var(--ink-3); }
+.fin-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.fin-list li { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 8px; background: #fff; border: 1px solid var(--line); font-size: 12.5px; }
+.fin-list li span:first-child { color: var(--ink-3); }
+.fin-list li .num { font-weight: 650; }
+.fin-list li.more { justify-content: center; color: var(--ink-3); background: none; border-style: dashed; }
+.pay-up { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pay-up > div { flex: 1; min-width: 140px; }
+.fin-sum { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+.fin-sum span { color: var(--ink-3); }
+.progress { height: 6px; border-radius: 99px; background: var(--sunken); margin: 10px 0 12px; overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--green); border-radius: 99px; transition: width .3s var(--ease); }
+.inst { list-style: none; margin: 0; padding: 0; }
+.inst li + li { border-top: 1px solid var(--line); }
+.inst label { display: flex; align-items: center; gap: 12px; padding: 9px 2px; cursor: pointer; }
+.inst input { position: absolute; opacity: 0; pointer-events: none; }
+.inst .box { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--line-strong); display: grid; place-items: center; flex: none; background: #fff; transition: .12s; }
+.inst .box .ic { width: 13px; height: 13px; color: #fff; opacity: 0; stroke-width: 3; }
+.inst input:checked + .box { background: var(--green); border-color: var(--green); }
+.inst input:checked + .box .ic { opacity: 1; }
+.inst input:focus-visible + .box { box-shadow: 0 0 0 3px var(--green-50); }
+.inst .i-main { flex: 1; min-width: 0; }
+.inst .i-main b { display: block; font-size: 13.5px; font-weight: 600; }
+.inst .i-main span { font-size: 12.5px; color: var(--ink-3); }
+.inst .i-amt { font-weight: 650; }
+.inst li.paid .i-main b, .inst li.paid .i-amt { color: var(--ink-3); }
+.inst li.late .i-main span { color: var(--coral-ink); font-weight: 600; }
+.notes-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.6; background: var(--amber-50); border: 1px solid var(--amber-100); border-radius: 10px; padding: 12px 14px; }
+.modal .card:has(.paymethod) { max-width: 600px; }
+@media (max-width: 760px) {
+  .fin-grid { grid-template-columns: minmax(0, 1fr); }
+  .manage-row { flex-wrap: wrap; }
+}

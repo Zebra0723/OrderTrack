@@ -28,6 +28,11 @@ Every push to `main` or a `claude/*` branch rebuilds the DMGs with GitHub Action
 - Order view: full details and status changes (pending, confirmed, in progress, shipped, delivered), with an optional update email to the customer for each change.
 - Customers: every customer with all their orders across both businesses.
 - Settings: all prices, colours, express availability, colour-to-model mapping, models, options, delivery wording, Hackulator games and pricing, email account, passcode, backup export and import. Everything saves automatically.
+- Customers can be recorded with an email, a phone number, or both. Orders sharing an email or phone are grouped as one customer.
+- Discounts: saved one-click discounts (set in Settings) or a custom percent or amount per order, changeable later from the order page. Shown in the order summary and in customer emails.
+- Payment: pay upfront (with a paid toggle) or finance, choosing weekly or monthly, the number of payments and the first payment date. The order page shows the instalment schedule with paid ticks and overdue payments highlighted.
+- Extra notes on each order, private to you and never sent to customers.
+- Cancel an order (kept on record, left out of open orders and totals, can be reopened) or delete it permanently.
 - Passcode lock on launch.
 
 ## Data and email
