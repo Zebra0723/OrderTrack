@@ -11,5 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   setSmtpPassword: (value) => ipcRenderer.invoke('secret:set', value),
   hasSmtpPassword: () => ipcRenderer.invoke('secret:has'),
   sendEmail: (smtp, message) => ipcRenderer.invoke('email:send', { smtp, message }),
-  openMailto: (url) => ipcRenderer.invoke('open:mailto', url)
+  openMailto: (url) => ipcRenderer.invoke('open:mailto', url),
+  invoicePdf: (html) => ipcRenderer.invoke('invoice:pdf', html),
+  saveInvoice: (html, filename) => ipcRenderer.invoke('invoice:save', { html, filename })
 });

@@ -111,12 +111,40 @@ ipcMain.handle('email:send', async (_e, { smtp, message }) => {
       to: message.to,
       subject: message.subject,
       text: message.text,
-      html: message.html
+      html: message.html,
+      attachments: (message.attachments || []).map((a) => ({ filename: a.filename, content: Buffer.from(a.base64, 'base64'), contentType: a.contentType }))
     });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
   }
+});
+
+// ---------- Invoices: render src/invoice.html with the given content to a PDF ----------
+async function renderPdf(html) {
+  const win = new BrowserWindow({ show: false, width: 800, height: 1130, webPreferences: { sandbox: true, contextIsolation: true } });
+  try {
+    await win.loadFile(path.join(__dirname, 'src', 'invoice.html'));
+    await win.webContents.executeJavaScript(`document.body.innerHTML = ${JSON.stringify(html)}; document.fonts.ready.then(() => true)`);
+    return await win.webContents.printToPDF({ pageSize: 'A4', printBackground: true, margins: { marginType: 'none' } });
+  } finally {
+    win.destroy();
+  }
+}
+
+ipcMain.handle('invoice:pdf', async (_e, html) => (await renderPdf(html)).toString('base64'));
+
+ipcMain.handle('invoice:save', async (_e, { html, filename }) => {
+  const pdf = await renderPdf(html);
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    title: 'Save invoice',
+    defaultPath: path.join(app.getPath('documents'), filename),
+    filters: [{ name: 'PDF', extensions: ['pdf'] }]
+  });
+  if (canceled || !filePath) return false;
+  fs.writeFileSync(filePath, pdf);
+  shell.openPath(filePath);
+  return true;
 });
 
 ipcMain.handle('open:mailto', (_e, url) => {

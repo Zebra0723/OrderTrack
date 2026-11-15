@@ -71,7 +71,16 @@
         host: '', port: 587, user: '', fromName: 'ClearSense and Hackulator', fromEmail: '',
         signOff: 'Thanks,\nThe ClearSense and Hackulator team'
       },
-      discounts: []
+      discounts: [],
+      invoice: {
+        address: '',
+        paymentInstructions: '',
+        footer: 'Thank you for your order.'
+      },
+      // Turnaround windows in days, counted from the day the item is received.
+      turnaround: { expressMin: 2, expressMax: 5, standardMin: 14, standardMax: 35, hackMax: 14, dueSoonDays: 2 },
+      // Extra parts tracked on the Stock page. stock null means not tracked.
+      parts: []
     };
   }
 
@@ -94,12 +103,18 @@
         cs: { ...d.settings.cs, ...(s.cs || {}) },
         hack: { ...d.settings.hack, ...(s.hack || {}) },
         email: { ...d.settings.email, ...(s.email || {}) },
-        discounts: Array.isArray(s.discounts) ? s.discounts : d.settings.discounts
+        discounts: Array.isArray(s.discounts) ? s.discounts : d.settings.discounts,
+        invoice: { ...d.settings.invoice, ...(s.invoice || {}) },
+        turnaround: { ...d.settings.turnaround, ...(s.turnaround || {}) },
+        parts: Array.isArray(s.parts) ? s.parts : []
       }
     };
   }
 
-  const money = (n) => '£' + (Math.round(Number(n || 0) * 100) / 100).toFixed(2);
+  const money = (n) => {
+    const v = Math.round(Number(n || 0) * 100) / 100;
+    return (v < 0 ? '-£' : '£') + Math.abs(v).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
   const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
 
   function coloursFor(settings, model) {
@@ -320,6 +335,155 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
     return customers(orders).find((c) => c.orders.includes(o)) || null;
   }
 
+  // ---------- Turnaround ----------
+  const DAY = 86400000;
+  const atNoon = (str) => new Date(str + 'T12:00:00');
+  const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+  const startOfDay = (d) => { const r = new Date(d); r.setHours(0, 0, 0, 0); return r; };
+
+  function turnaroundWindow(settings, o) {
+    const t = settings.turnaround;
+    if (o.business === 'cs') return o.delivery === 'express' ? [num(t.expressMin), num(t.expressMax)] : [num(t.standardMin), num(t.standardMax)];
+    return [0, num(t.hackMax)];
+  }
+
+  // When the order first reached Shipped (or Delivered, if Shipped was skipped).
+  function shippedAt(o) {
+    const h = (o.history || []).find((x) => !x.note && (x.status === 'shipped' || x.status === 'delivered'));
+    return h ? h.at : null;
+  }
+
+  function turnaround(settings, o, now) {
+    if (!o.receivedAt) return null;
+    const [minD, maxD] = turnaroundWindow(settings, o);
+    const received = atNoon(o.receivedAt);
+    const from = addDays(received, minD), by = addDays(received, maxD);
+    const today = startOfDay(now || new Date());
+    const dueDay = startOfDay(by);
+    const sAt = shippedAt(o);
+    const out = { received, from, by, minD, maxD, shippedAt: sAt, daysTaken: null, daysLeft: null, state: 'on_track' };
+    if (sAt) {
+      out.daysTaken = Math.max(0, Math.round((startOfDay(sAt) - startOfDay(received)) / DAY));
+      out.state = startOfDay(sAt) <= dueDay ? 'on_time' : 'late';
+      out.daysLate = Math.round((startOfDay(sAt) - dueDay) / DAY);
+    } else if (o.status === 'cancelled') {
+      out.state = 'cancelled';
+    } else {
+      out.daysLeft = Math.round((dueDay - today) / DAY);
+      out.state = out.daysLeft < 0 ? 'overdue' : out.daysLeft <= num(settings.turnaround.dueSoonDays) ? 'due_soon' : 'on_track';
+    }
+    return out;
+  }
+
+  // ---------- Stock ----------
+  // Colours and parts carry stock (null = not tracked) and lowAt. Orders remember what
+  // they took in o.stockTaken so it can be given back exactly once.
+  function stockItem(settings, it) {
+    return it.kind === 'colour' ? settings.cs.colours.find((c) => c.id === it.id) : (settings.parts || []).find((x) => x.id === it.id);
+  }
+  function stockNeeds(settings, o) {
+    const needs = [];
+    if (o.business === 'cs' && o.colourId) {
+      const c = settings.cs.colours.find((x) => x.id === o.colourId);
+      if (c && c.stock != null) needs.push({ kind: 'colour', id: c.id });
+    }
+    for (const part of settings.parts || []) if (part.perOrder === o.business && part.stock != null) needs.push({ kind: 'part', id: part.id });
+    return needs;
+  }
+  function takeStock(settings, o) {
+    if (o.stockTaken && o.stockTaken.length) return;
+    const needs = stockNeeds(settings, o);
+    needs.forEach((it) => { const x = stockItem(settings, it); if (x && x.stock != null) x.stock = num(x.stock) - 1; });
+    o.stockTaken = needs;
+  }
+  function returnStock(settings, o) {
+    (o.stockTaken || []).forEach((it) => { const x = stockItem(settings, it); if (x && x.stock != null) x.stock = num(x.stock) + 1; });
+    o.stockTaken = [];
+  }
+  function stockState(x) {
+    if (!x || x.stock == null) return 'untracked';
+    if (num(x.stock) <= 0) return 'out';
+    if (num(x.stock) <= num(x.lowAt != null ? x.lowAt : 2)) return 'low';
+    return 'ok';
+  }
+  function lowStock(settings) {
+    return [...settings.cs.colours, ...(settings.parts || [])].filter((x) => ['low', 'out'].includes(stockState(x)));
+  }
+
+  // ---------- Invoices ----------
+  function isFullyPaid(o) {
+    const p = o.payment;
+    if (!p || p.method !== 'finance') return !!(p && p.paid);
+    const sched = paymentSchedule(o);
+    return sched.length > 0 && sched.every((x) => x.paid);
+  }
+
+  function invoiceLines(settings, o) {
+    const subtotal = o.subtotal != null ? o.subtotal : o.price;
+    const lines = [];
+    if (o.business === 'cs') {
+      const addons = (o.addonIds || []).map((id, i) => {
+        const a = settings.cs.addons.find((x) => x.id === id);
+        return { name: (o.addonNames || [])[i] || (a ? a.name : 'Option'), price: a ? num(a.price) : 0 };
+      });
+      const extras = addons.reduce((t, a) => t + a.price, 0);
+      lines.push({ desc: `Custom controller housing, ${o.model}, ${o.colourName}`, sub: `${deliveryText(settings, o.delivery)}. Installation included.`, amount: Math.max(subtotal - extras, 0) });
+      addons.forEach((a) => lines.push({ desc: a.name, sub: '', amount: a.price }));
+    } else {
+      const extra = (o.extraGames || []).length;
+      const extrasTotal = Math.min(extra * num(settings.hack.extraGamePrice), subtotal);
+      lines.push({ desc: `Hacked calculator, ${o.donor}`, sub: `Includes ${(o.includedGames || []).join(', ') || 'the base games'}.`, amount: subtotal - extrasTotal });
+      if (extra) lines.push({ desc: `Extra games (${extra})`, sub: o.extraGames.join(', '), amount: extrasTotal });
+    }
+    return lines;
+  }
+
+  function invoiceNumber(o) { return 'INV-' + o.orderId; }
+
+  // Returns the inner HTML for src/invoice.html (styles live there).
+  function invoiceHtml(settings, o, issued) {
+    const biz = settings.businessNames[o.business];
+    const inv = settings.invoice || {};
+    const date = (issued || new Date()).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const lines = invoiceLines(settings, o);
+    const sched = paymentSchedule(o);
+    const paid = isFullyPaid(o);
+    const p = o.payment || { method: 'upfront' };
+    const br = (t) => esc(t).replace(/\n/g, '<br>');
+    const contact = [o.customerEmail, o.customerPhone].filter(Boolean).map(esc).join('<br>');
+    return `<div class="inv ${o.business}">
+  <header>
+    <div class="from"><div class="biz">${esc(biz)}</div>${inv.address ? `<div class="addr">${br(inv.address)}</div>` : ''}</div>
+    <div class="title"><h1>Invoice</h1>${paid ? '<div class="stamp">Paid</div>' : ''}</div>
+  </header>
+  <section class="meta">
+    <div><span>Billed to</span><b>${esc(o.customerName)}</b>${contact ? `<div class="sm">${contact}</div>` : ''}</div>
+    <div><span>Invoice number</span><b>${esc(invoiceNumber(o))}</b><span>Date</span><b>${esc(date)}</b></div>
+    <div><span>Order</span><b>${esc(o.orderId)}</b><span>Serial number</span><b class="mono">${esc(o.serial)}</b></div>
+  </section>
+  <table class="items">
+    <thead><tr><th>Description</th><th class="r">Amount</th></tr></thead>
+    <tbody>${lines.map((l) => `<tr><td><b>${esc(l.desc)}</b>${l.sub ? `<div class="sub">${esc(l.sub)}</div>` : ''}</td><td class="r">${l.amount ? money(l.amount) : 'Included'}</td></tr>`).join('')}</tbody>
+  </table>
+  <table class="totals">
+    ${o.discount && o.discount.amount > 0 ? `<tr><td>Subtotal</td><td class="r">${money(o.subtotal)}</td></tr>
+    <tr><td>Discount${o.discount.label ? ` (${esc(o.discount.label)})` : ''}, ${esc(discountText(o.discount))}</td><td class="r">-${money(o.discount.amount)}</td></tr>` : ''}
+    <tr class="grand"><td>Total</td><td class="r">${money(o.price)}</td></tr>
+  </table>
+  <section class="pay">
+    <h2>Payment</h2>
+    ${p.method === 'finance'
+      ? `<p>${sched.length} ${p.frequency} payments.</p>
+    <table class="sched"><thead><tr><th>#</th><th>Due</th><th class="r">Amount</th><th class="r">Status</th></tr></thead><tbody>
+    ${sched.map((x) => `<tr><td>${x.n}</td><td>${x.due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td><td class="r">${money(x.amount)}</td><td class="r ${x.paid ? 'ok' : ''}">${x.paid ? 'Paid' : 'Due'}</td></tr>`).join('')}
+    </tbody></table>`
+      : `<p>${paid ? 'Paid in full. Thank you.' : `Full payment of ${money(o.price)} is due.`}</p>`}
+    ${inv.paymentInstructions && !paid ? `<div class="howto"><span>How to pay</span>${br(inv.paymentInstructions)}</div>` : ''}
+  </section>
+  ${inv.footer ? `<footer>${br(inv.footer)}</footer>` : ''}
+</div>`;
+  }
+
   async function hashPasscode(passcode, salt) {
     const bytes = new TextEncoder().encode(salt + ':' + passcode);
     const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -327,6 +491,7 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
   }
 
   window.OT = {
+    turnaround, turnaroundWindow, shippedAt, takeStock, returnStock, stockState, lowStock, isFullyPaid, invoiceLines, invoiceNumber, invoiceHtml,
     customerOf, paymentSchedule, paymentText, STATUSES, CANCELLED, statusInfo, isOpen, phoneDigits, validatePhone, customerKey, uid, emptyDB, migrate, money, num, coloursFor, deliveryOptions, deliveryText,
     csPrice, parseGames, hackPrice, validateSerial, nextOrderId, statusLabel, orderLines,
     buildStatusEmail, customers, hashPasscode, esc, guessSwatch, discountAmount, discountText, applyDiscount

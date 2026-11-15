@@ -20,7 +20,9 @@
     setSmtpPassword: async (v) => { localStorage.setItem('ordertrack-smtp', v ? '1' : ''); return true; },
     hasSmtpPassword: async () => !!localStorage.getItem('ordertrack-smtp'),
     sendEmail: async (_s, m) => { console.log('EMAIL', m); return { ok: true }; },
-    openMailto: async () => true
+    openMailto: async () => true,
+    invoicePdf: async (html) => { window.__lastInvoice = html; return btoa('pdf'); },
+    saveInvoice: async (html, name) => { window.__lastInvoice = html; window.__lastInvoiceName = name; return true; }
   };
 
   // ---------- Icons (inline SVG line icons) ----------
@@ -47,14 +49,24 @@
     upload: '<path d="M12 20V9M7 13.5l5-5 5 5M5 4h14"/>',
     phone: '<path d="M5 3.5h3.2l1.6 4.2-2.1 1.4a11 11 0 0 0 5.2 5.2l1.4-2.1 4.2 1.6v3.2a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 3 5.7a2 2 0 0 1 2-2.2z"/>',
     minus: '<path d="M5 12h14"/>',
+    home: '<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/>',
+    chart: '<path d="M3 20h18M6.5 16v-5M11.5 16V6M16.5 16v-8"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    alert: '<path d="M12 3.5 2.8 19.5h18.4z"/><path d="M12 10v4M12 16.8h.01"/>',
+    file: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
+    coins: '<ellipse cx="12" cy="6.5" rx="7" ry="3"/><path d="M5 6.5v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5M5 11.5v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5"/>',
+    board: '<rect x="3.5" y="4" width="5" height="16" rx="1.5"/><rect x="9.5" y="4" width="5" height="11" rx="1.5"/><rect x="15.5" y="4" width="5" height="7" rx="1.5"/>',
+    list: '<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
+    truck: '<path d="M2.5 6.5h11v9h-11zM13.5 9.5h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/>',
+    trend: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
     tag: '<path d="M3 12V4.5A1.5 1.5 0 0 1 4.5 3H12l9 9-9 9-9-9z"/><circle cx="7.5" cy="7.5" r="1.5"/>'
   };
   const icon = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
   const MARK = `<svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="#FFFDF9"/><rect x="0.5" y="0.5" width="63" height="63" rx="14.5" fill="none" stroke="#E6DDCE"/><rect x="13" y="15" width="38" height="9" rx="4.5" fill="#1A1D29"/><circle cx="17.5" cy="19.5" r="2.6" fill="#FF6B5A"/><rect x="13" y="27.5" width="38" height="9" rx="4.5" fill="#FF6B5A"/><circle cx="17.5" cy="32" r="2.6" fill="#FFFDF9"/><rect x="13" y="40" width="27" height="9" rx="4.5" fill="#F5A524"/><circle cx="17.5" cy="44.5" r="2.6" fill="#FFFDF9"/></svg>`;
 
   let DB = OT.emptyDB();
-  let route = { page: 'cs' };
-  const listState = { cs: { tab: 'active', q: '' }, hack: { tab: 'active', q: '' } };
+  let route = { page: 'home' };
+  const listState = { cs: { tab: 'active', q: '', view: 'list' }, hack: { tab: 'active', q: '', view: 'list' } };
   let hasSmtpPassword = false;
   let customerQuery = '';
   let openCustomer = null;
@@ -197,11 +209,14 @@
         <input id="findInput" type="search" placeholder="Find order" aria-label="Find order by serial or order ID" spellcheck="false">
         <kbd>${api.platform === 'darwin' ? '&#8984;F' : 'Ctrl F'}</kbd>
       </form>
+      <button class="sb-item" data-nav="home">${icon('home')}Home<span class="sb-count" id="count-att"></span></button>
       <div class="sb-label">Orders</div>
       <button class="sb-item" data-nav="cs"><span class="sb-dot cs">${icon('pad')}</span><span id="nm-cs"></span><span class="sb-count" id="count-cs"></span></button>
       <button class="sb-item" data-nav="hack"><span class="sb-dot hack">${icon('calc')}</span><span id="nm-hack"></span><span class="sb-count" id="count-hack"></span></button>
       <div class="sb-label">Records</div>
       <button class="sb-item" data-nav="customers">${icon('users')}Customers<span class="sb-count" id="count-cust"></span></button>
+      <button class="sb-item" data-nav="reports">${icon('chart')}Reports</button>
+      <button class="sb-item" data-nav="stock">${icon('box')}Stock<span class="sb-count" id="count-stock"></span></button>
       <div class="sb-spacer"></div>
       <div class="sb-foot">
         <button class="sb-item" data-nav="settings">${icon('gear')}Settings</button>
@@ -223,6 +238,12 @@
       $('#count-' + b).textContent = open || '';
     }
     $('#count-cust').textContent = OT.customers(DB.orders).length || '';
+    const lowN = OT.lowStock(S()).length;
+    $('#count-stock').textContent = lowN || '';
+    $('#count-stock').classList.toggle('warn', lowN > 0);
+    const attN = attentionItems().filter((a) => a.tone === 'bad').length;
+    $('#count-att').textContent = attN || '';
+    $('#count-att').classList.toggle('warn', attN > 0);
   }
 
   // ---------- Routing ----------
@@ -234,7 +255,7 @@
     content.scrollTop = 0;
   }
 
-  const PAGE_TITLES = { customers: 'Customers', settings: 'Settings', results: 'Search' };
+  const PAGE_TITLES = { home: 'Home', customers: 'Customers', settings: 'Settings', results: 'Search', reports: 'Reports', stock: 'Stock' };
 
   function render() {
     const activeBiz = route.biz || (route.page === 'cs' || route.page === 'hack' ? route.page : null);
@@ -253,6 +274,9 @@
       case 'order': return renderOrder();
       case 'customers': return renderCustomers();
       case 'settings': return renderSettings();
+      case 'home': return renderHome();
+      case 'reports': return renderReports();
+      case 'stock': return renderStock();
       case 'results': return renderResults();
     }
   }
@@ -276,7 +300,7 @@
       <div class="card kpis">
         <div class="kpi"><div class="k"><i style="background:var(--accent)"></i>Open</div><div class="v">${active.length}</div></div>
         <div class="kpi"><div class="k"><i style="background:var(--ink-4)"></i>Pending</div><div class="v">${counts.pending}</div></div>
-        <div class="kpi"><div class="k"><i style="background:var(--amber)"></i>In progress</div><div class="v">${counts.in_progress}</div></div>
+        <div class="kpi"><div class="k"><i style="background:var(--coral)"></i>Due soon or overdue</div><div class="v">${active.filter((o) => { const t = OT.turnaround(S(), o); return t && ['due_soon', 'overdue'].includes(t.state); }).length}</div></div>
         <div class="kpi"><div class="k"><i style="background:var(--green)"></i>Total value</div><div class="v">${money(revenue)}</div></div>
       </div>
       <div class="card" style="overflow:hidden">
@@ -287,7 +311,8 @@
             ${counts.cancelled ? `<button data-tab="cancelled">Cancelled<span class="count">${counts.cancelled}</span></button>` : ''}
             <button data-tab="all">All<span class="count">${all.length}</span></button>
           </div>
-          <div class="filterbox">${icon('search')}<input type="text" id="listQ" placeholder="Filter by name, email, phone, serial" value="${esc(st.q)}"></div>
+          <div class="tools"><div class="viewseg seg"><label title="List"><input type="radio" name="lview" value="list" ${st.view !== 'board' ? 'checked' : ''}><span>${icon('list')}List</span></label><label title="Board"><input type="radio" name="lview" value="board" ${st.view === 'board' ? 'checked' : ''}><span>${icon('board')}Board</span></label></div>
+          <div class="filterbox">${icon('search')}<input type="text" id="listQ" placeholder="Filter by name, email, phone, serial" value="${esc(st.q)}"></div></div>
         </div>
         <div id="listBody"></div>
       </div>`;
@@ -297,8 +322,16 @@
       const q = st.q.trim().toLowerCase();
       let shown = st.tab === 'all' ? all : st.tab === 'active' ? active : all.filter((o) => o.status === st.tab);
       if (q) shown = shown.filter((o) => [o.customerName, o.customerEmail, o.customerPhone, o.serial, o.orderId, o.colourName, o.donor, o.model, o.notes].some((v) => String(v || '').toLowerCase().includes(q)));
+      $('.tabs').hidden = st.view === 'board';
+      if (st.view === 'board') {
+        const boardOrders = q ? all.filter((o) => shown.includes(o) || [o.customerName, o.customerEmail, o.customerPhone, o.serial, o.orderId, o.colourName, o.donor].some((v) => String(v || '').toLowerCase().includes(q))) : all;
+        $('#listBody').innerHTML = all.length ? boardHtml(boardOrders.filter((o) => o.status !== 'cancelled')) : emptyState(0, biz, q);
+        wireBoard($('#listBody'));
+        return;
+      }
       $('#listBody').innerHTML = shown.length ? orderTable(shown, false) : emptyState(all.length, biz, q);
     };
+    $$('input[name=lview]').forEach((r) => r.onchange = () => { st.view = r.value; draw(); });
     $$('[data-tab]').forEach((b) => b.onclick = () => { st.tab = b.dataset.tab; draw(); });
     $('#listQ').oninput = (e) => { st.q = e.target.value; draw(); };
     draw();
@@ -315,15 +348,16 @@
 
   function orderTable(orders, showBiz) {
     return `<table class="table">
-      <thead><tr><th>Order</th><th>Customer</th><th class="hide-sm">Item</th><th class="r">Price</th><th>Status</th><th class="hide-md">Updated</th></tr></thead>
+      <thead><tr><th>Order</th><th class="hide-sm"></th><th>Customer</th><th class="hide-sm">Item</th><th class="r">Price</th><th>Status</th><th class="hide-md">Updated</th></tr></thead>
       <tbody>${orders.map((o) => {
         const last = o.history && o.history.length ? o.history[o.history.length - 1].at : o.createdAt;
         return `<tr data-open="${o.id}">
         <td><b>${esc(o.orderId)}</b><span class="sub mono">${showBiz ? `${esc(bizName(o.business))}, ` : ''}${esc(o.serial)}</span></td>
+        <td class="hide-sm" style="width:64px;padding-right:0"><div class="row-art">${orderArt(o, 'mini')}</div></td>
         <td><div class="person">${avatar(o.customerName, custKey(o))}<div><b>${esc(o.customerName)}</b><span class="sub hide-sm">${esc(contactLine(o))}</span></div></div></td>
         <td class="hide-sm">${itemCell(o)}</td>
         <td class="r num"><b>${money(o.price)}</b></td>
-        <td>${pill(o.status)}</td>
+        <td><div class="statuscell">${pill(o.status)}${dueBadge(o)}</div></td>
         <td class="hide-md muted" style="font-size:13px;white-space:nowrap">${ago(last)}</td>
       </tr>`;
       }).join('')}</tbody></table>`;
@@ -443,6 +477,7 @@
     order.status = 'pending';
     order.createdAt = now;
     order.history = [{ status: 'pending', at: now, email: 'none' }];
+    OT.takeStock(S(), order);
     DB.orders.push(order);
     if (await persist(`Order ${order.orderId} created`)) go('order', { id: order.id, biz: order.business });
   }
@@ -631,8 +666,9 @@
       model: 'model', colourId: 'colour', delivery: 'delivery', addonIds: 'options', donor: 'donor calculator', extraGames: 'extra games', notes: 'notes'
     };
     const changed = Object.keys(labels).filter((k) => k in fields && JSON.stringify(fields[k] ?? '') !== JSON.stringify(o[k] ?? '')).map((k) => labels[k]);
-    const oldDisc = fmtDisc(o.discount), oldPay = fmtPay(o.payment), oldPrice = o.price;
+    const oldDisc = fmtDisc(o.discount), oldPay = fmtPay(o.payment), oldPrice = o.price, oldColour = o.colourId;
     Object.assign(o, fields);
+    if (o.colourId !== oldColour && o.status !== 'cancelled') { OT.returnStock(S(), o); OT.takeStock(S(), o); }
     o.subtotal = subtotal;
     o.price = subtotal;
     OT.applyDiscount(o, disc);
@@ -687,7 +723,7 @@
         ? '<div class="placeholder-note">Choose a model to see its colours.</div>'
         : list.length ? `<div class="tiles colours">${list.map((c) => {
           const prices = OT.deliveryOptions(c).map((o) => o.price);
-          return `<label class="tile"><input type="radio" name="colour" value="${c.id}" ${c.id === prev ? 'checked' : ''}>${swatch(c.swatch, true)}<span class="t-main"><span class="t-title">${esc(c.name)}</span><span class="t-sub">from ${money(Math.min(...prices))}</span></span></label>`;
+          return `<label class="tile"><input type="radio" name="colour" value="${c.id}" ${c.id === prev ? 'checked' : ''}><span class="tile-art">${controllerArt(c.swatch, c.name, 'mini')}</span><span class="t-main"><span class="t-title">${esc(c.name)}</span><span class="t-sub">from ${money(Math.min(...prices))}${c.stock != null ? `<span class="stk ${OT.stockState(c)}">${stockLabel(c)}</span>` : ''}</span></span></label>`;
         }).join('')}</div>` : '<div class="placeholder-note">No colours are set up for this model.</div>';
       if (missing) $('#colourBox').insertAdjacentHTML('afterbegin', `<div class="callout" style="margin-bottom:10px">${icon('info')}<div>This order's colour, ${esc(ed.colourName)}, is no longer offered for ${esc(model)} in Settings. Choose a colour to save changes.</div></div>`);
       drawDelivery();
@@ -874,7 +910,8 @@
         <button class="btn" data-action="editOrder">${icon('edit')}Edit order</button></div>
       <section class="card hero">
         <div class="hero-top">
-          <div>
+          <div class="hero-art ${o.business}">${orderArt(o)}</div>
+          <div class="hero-main">
             <div style="display:flex;gap:10px;align-items:center">${bizChip(o.business)}${pill(o.status)}</div>
             <h1>${esc(o.orderId)}</h1>
             <div class="meta"><span class="chip mono">${esc(o.serial)}</span><span>Created ${fmtDateTime(o.createdAt)}</span></div>
@@ -890,17 +927,18 @@
       <div class="ordergrid">
         <div class="stack">
           <section class="card">
-            <div class="card-head"><h2>Product details</h2></div>
+            <div class="card-head"><h2>${hchip(o.business === 'cs' ? 'pad' : 'calc')}Product details</h2></div>
             <div class="card-pad" style="padding-top:8px">
               <dl class="dl">${details.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${k === 'Colour' ? swatch(swatchOf(o)) : ''}${esc(v)}</dd>`).join('')}</dl>
             </div>
           </section>
+          ${turnaroundCard(o)}
           <section class="card">
-            <div class="card-head"><h2>Extra notes</h2><button class="btn sm" data-action="editNotes">${icon('edit')}${o.notes ? 'Edit' : 'Add notes'}</button></div>
+            <div class="card-head"><h2>${hchip('edit')}Extra notes</h2><button class="btn sm" data-action="editNotes">${icon('edit')}${o.notes ? 'Edit' : 'Add notes'}</button></div>
             <div class="card-pad" style="padding-top:12px">${o.notes ? `<div class="notes-text">${esc(o.notes)}</div>` : '<p class="muted" style="margin:0;font-size:13.5px">No notes yet. Notes are private and never sent to the customer.</p>'}</div>
           </section>
           <section class="card">
-            <div class="card-head"><h2>Activity</h2><span class="meta">${o.history.length} update${o.history.length === 1 ? '' : 's'}</span></div>
+            <div class="card-head"><h2>${hchip('clock')}Activity</h2><span class="meta">${o.history.length} update${o.history.length === 1 ? '' : 's'}</span></div>
             <div class="card-pad">
               <ul class="activity">${[...o.history].reverse().map((h) => `<li><span class="dot"></span><div>
                 <b>${h === o.history[0] ? 'Order created' : h.note ? esc(h.note) : h.status === 'cancelled' ? 'Order cancelled' : `Marked as ${esc(OT.statusLabel(h.status))}`}</b>${EMAIL_NOTE[h.email] ? `<span class="mail">${icon('mail')}${EMAIL_NOTE[h.email]}</span>` : ''}
@@ -910,7 +948,7 @@
         </div>
         <div class="stack">
           <section class="card">
-            <div class="card-head"><h2>Customer</h2><button class="btn sm" data-action="editContact">${icon('edit')}Edit</button></div>
+            <div class="card-head"><h2>${hchip('users')}Customer</h2><button class="btn sm" data-action="editContact">${icon('edit')}Edit</button></div>
             <div class="card-pad">
               <div class="custcard">${avatar(o.customerName, custKey(o), true)}<div style="min-width:0"><b>${esc(o.customerName)}</b>
                 ${o.customerEmail ? `<span class="contact">${icon('mail', 'sm')}${esc(o.customerEmail)}</span>` : ''}
@@ -921,17 +959,18 @@
             </div>
           </section>
           <section class="card">
-            <div class="card-head"><h2>Price</h2><button class="btn sm" data-action="editDiscount">${icon('tag')}${hasDisc ? 'Change discount' : 'Add discount'}</button></div>
+            <div class="card-head"><h2>${hchip('tag')}Price</h2><button class="btn sm" data-action="editDiscount">${icon('tag')}${hasDisc ? 'Change discount' : 'Add discount'}</button></div>
             <div class="card-pad" style="padding-top:8px">
               <dl class="dl">
                 ${hasDisc ? `<dt>Subtotal</dt><dd class="num">${money(o.subtotal)}</dd><dt>Discount</dt><dd><span class="disc-val num">-${money(o.discount.amount)}</span><span class="muted" style="font-weight:500">${esc(discWhy)}</span></dd>` : ''}
                 <dt>Total</dt><dd class="num" style="font-size:16px">${money(o.price)}</dd>
               </dl>
+              <div class="inv-row"><button class="btn sm" data-action="invoiceSave">${icon('file')}Download invoice</button><button class="btn sm" data-action="invoiceEmail" ${o.customerEmail ? '' : 'disabled'}>${icon('send')}Email invoice</button></div>
             </div>
           </section>
           ${paymentCard(o)}
           <section class="card">
-            <div class="card-head"><h2>Notify customer</h2></div>
+            <div class="card-head"><h2>${hchip('mail')}Notify customer</h2></div>
             <div class="card-pad" style="display:grid;gap:12px">
               <p class="muted" style="margin:0;font-size:13.5px">Each status change asks whether to email the customer. You can also resend the current status at any time.</p>
               <button class="btn block" data-action="resend" ${o.customerEmail ? '' : 'disabled'}>${icon('send')}Email current status</button>
@@ -939,7 +978,7 @@
             </div>
           </section>
           <section class="card">
-            <div class="card-head"><h2>Manage order</h2></div>
+            <div class="card-head"><h2>${hchip('gear')}Manage order</h2></div>
             <div class="card-pad manage">
               ${cancelled
                 ? `<div class="manage-row"><div><b>Reopen order</b><span>Put it back to ${esc(OT.statusLabel(o.cancelledFrom || 'pending'))}.</span></div><button class="btn sm" data-action="reopenOrder">Reopen</button></div>`
@@ -963,7 +1002,7 @@
 
   function paymentCard(o) {
     const pay = o.payment || { method: 'upfront', paid: false };
-    const head = `<div class="card-head"><h2>Payment</h2><button class="btn sm" data-action="editPayment">${icon('edit')}Change</button></div>`;
+    const head = `<div class="card-head"><h2>${hchip('coins')}Payment</h2><button class="btn sm" data-action="editPayment">${icon('edit')}Change</button></div>`;
     if (pay.method !== 'finance') {
       return `<section class="card">${head}<div class="card-pad pay-up">
         <div><b>Pay upfront</b><span class="sub">${money(o.price)} in one payment</span></div>
@@ -1025,20 +1064,24 @@
     const label = OT.statusLabel(status);
     modal(`<div class="m-body"><h2>Mark ${esc(o.orderId)} as ${esc(label)}?</h2>
       <p>${esc(OT.STATUSES.find((s) => s.id === status).line)}</p>
+      ${!o.receivedAt && ['confirmed', 'in_progress', 'shipped'].includes(status) ? `<label class="notify"><input type="checkbox" id="markRecv" ${status !== 'confirmed' ? 'checked' : ''}><div><b>The ${o.business === 'cs' ? 'controller' : 'calculator'} arrived today</b><span>Starts the turnaround window. You can change the date later.</span></div></label>` : ''}
       ${notifyBox(o)}</div>
       <div class="m-foot"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" id="okBtn">Mark as ${esc(label)}</button></div>`, (m, close) => {
       $('#okBtn', m).onclick = async () => {
         const send = !!($('#sendMail', m) || {}).checked;
+        const recv = !!($('#markRecv', m) || {}).checked;
         close();
+        if (recv) o.receivedAt = todayStr();
         o.status = status;
         const entry = { status, at: Date.now(), email: 'none' };
         o.history.push(entry);
-        await persist(`Marked as ${label}`);
-        renderOrder();
+        await persist(`${o.orderId} marked as ${label}`);
+        const refresh = () => (route.page === 'order' && route.id === o.id ? renderOrder() : render());
+        refresh();
         if (send) {
           entry.email = await sendStatusEmail(o);
           await persist();
-          if (route.page === 'order' && route.id === o.id) renderOrder();
+          refresh();
         }
       };
     }, o.business);
@@ -1063,6 +1106,7 @@
         close();
         o.cancelledFrom = o.status;
         o.status = 'cancelled';
+        OT.returnStock(S(), o);
         const entry = { status: 'cancelled', at: Date.now(), email: 'none' };
         o.history.push(entry);
         await persist(`${o.orderId} cancelled`);
@@ -1080,6 +1124,7 @@
     const back = o.cancelledFrom || 'pending';
     o.status = back;
     delete o.cancelledFrom;
+    OT.takeStock(S(), o);
     o.history.push({ status: back, at: Date.now(), email: 'none', note: `Order reopened as ${OT.statusLabel(back)}` });
     await persist(`${o.orderId} reopened`);
     renderOrder();
@@ -1198,7 +1243,7 @@
 
   const SETTINGS_SECTIONS = [
     ['set-colours', 'Colours'], ['set-models', 'BDM models'], ['set-options', 'Options'], ['set-discounts', 'Discounts'], ['set-delivery', 'Delivery wording'],
-    ['set-hack', 'Hackulator'], ['set-email', 'Email'], ['set-general', 'Business names'], ['set-pass', 'Passcode'], ['set-data', 'Data and backup']
+    ['set-hack', 'Hackulator'], ['set-invoice', 'Invoices'], ['set-turn', 'Turnaround'], ['set-email', 'Email'], ['set-general', 'Business names'], ['set-pass', 'Passcode'], ['set-data', 'Data and backup']
   ];
 
   async function renderSettings() {
@@ -1252,6 +1297,19 @@
             <div class="field"><label>Base price</label>${priceInput('data-set="hack.basePrice" data-num', s.hack.basePrice)}</div>
             <div class="field"><label>Extra game price</label>${priceInput('data-set="hack.extraGamePrice" data-num', s.hack.extraGamePrice)}</div>
             <div class="field full"><label>Included games, one per line</label><textarea data-set="hack.includedGames" data-lines>${esc(s.hack.includedGames.join('\n'))}</textarea></div></div>`)}
+
+          ${sset('set-invoice', 'Invoices', 'Shown on every invoice PDF. The invoice number is INV- followed by the order ID.', `<div class="grid">
+            <div class="field"><label>Your address and contact details</label><textarea data-set="invoice.address" style="min-height:96px" placeholder="Name, address, email, phone">${esc(s.invoice.address)}</textarea></div>
+            <div class="field"><label>How to pay</label><textarea data-set="invoice.paymentInstructions" style="min-height:96px" placeholder="For example bank details or a payment link">${esc(s.invoice.paymentInstructions)}</textarea><div class="hint">Shown until the order is fully paid.</div></div>
+            <div class="field full"><label>Footer message</label><input type="text" data-set="invoice.footer" value="${esc(s.invoice.footer)}"></div></div>`)}
+
+          ${sset('set-turn', 'Turnaround', 'Days counted from when the item arrives. Orders get a due date, and a warning when they are close to it or late. The wording customers see is set under Delivery wording.', `<div class="grid three">
+            <div class="field"><label>Express, earliest (days)</label><input type="number" min="0" data-set="turnaround.expressMin" data-num value="${esc(s.turnaround.expressMin)}"></div>
+            <div class="field"><label>Express, latest (days)</label><input type="number" min="0" data-set="turnaround.expressMax" data-num value="${esc(s.turnaround.expressMax)}"></div>
+            <div class="field"><label>Warn this many days before</label><input type="number" min="0" data-set="turnaround.dueSoonDays" data-num value="${esc(s.turnaround.dueSoonDays)}"></div>
+            <div class="field"><label>Non express, earliest (days)</label><input type="number" min="0" data-set="turnaround.standardMin" data-num value="${esc(s.turnaround.standardMin)}"></div>
+            <div class="field"><label>Non express, latest (days)</label><input type="number" min="0" data-set="turnaround.standardMax" data-num value="${esc(s.turnaround.standardMax)}"></div>
+            <div class="field"><label>${esc(bizName('hack'))}, latest (days)</label><input type="number" min="0" data-set="turnaround.hackMax" data-num value="${esc(s.turnaround.hackMax)}"></div></div>`)}
 
           ${sset('set-email', 'Email', 'Used to send status updates directly. For Gmail use host smtp.gmail.com, port 587, your Gmail address as the username, and an app password from your Google account. Until this is set up, emails open in your mail app.', `<div class="grid">
             <div class="field"><label>SMTP host</label><input type="text" data-set="email.host" value="${esc(s.email.host)}" placeholder="smtp.gmail.com" spellcheck="false"></div>
@@ -1449,6 +1507,652 @@
     }
   }
 
+  // ======================================================================
+  // Illustrations, charts and the Home, Reports, Stock and Board views
+  // ======================================================================
+  const hchip = (n) => `<span class="hchip">${icon(n)}</span>`;
+  const STATUS_COLOR = { pending: '#B3B2B3', confirmed: '#3456A3', in_progress: '#F5A524', shipped: '#FF6B5A', delivered: '#2B7A57' };
+  // Chart series colours, validated for colour-vision separation against white.
+  const CHART = { cs: '#F06A55', hack: '#8C5A00' };
+  const DAYMS = 86400000;
+  const startOfDay = (d) => { const r = new Date(d); r.setHours(0, 0, 0, 0); return r; };
+  const shortMoney = (v) => (v >= 1000 ? '£' + (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'k' : '£' + Math.round(v));
+  const live = (orders) => orders.filter((o) => o.status !== 'cancelled');
+  let artSeq = 0;
+
+  function hexLum(hex) {
+    const h = String(hex || '#999').replace('#', '');
+    const v = h.length === 3 ? h.split('').map((c) => c + c).join('') : h.padEnd(6, '9');
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) / 255);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  // A generic game controller, tinted with the order's colour. Clear colours are see-through,
+  // Dragon gets scales and Anime gets a halftone with sparkles.
+  const PAD_BODY = 'M70 40C95 28 130 30 160 30S225 28 250 40C280 52 300 100 306 150C311 185 290 200 268 192C248 185 236 160 220 150C200 140 120 140 100 150C84 160 72 185 52 192C30 200 9 185 14 150C20 100 40 52 70 40Z';
+  function controllerArt(hex, name, cls) {
+    const id = 'pa' + (++artSeq);
+    const n = String(name || '').toLowerCase();
+    const clear = n.includes('clear');
+    const dark = hexLum(hex) < 0.35;
+    const btn = n.includes('black button') ? '#1F1F23' : dark ? 'rgba(255,255,255,.22)' : 'rgba(26,29,41,.26)';
+    const btnRing = dark ? 'rgba(255,255,255,.12)' : 'rgba(26,29,41,.12)';
+    const pattern = n.includes('dragon') ? 'dragon' : n.includes('anime') ? 'anime' : '';
+    return `<svg class="art art-pad ${cls || ''}" viewBox="0 0 320 210" aria-hidden="true">
+      <defs>
+        <linearGradient id="${id}s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".2"/></linearGradient>
+        <clipPath id="${id}c"><path d="${PAD_BODY}"/></clipPath>
+        <pattern id="${id}d" width="18" height="13" patternUnits="userSpaceOnUse"><path d="M0 13Q9 0 18 13" fill="none" stroke="#000" stroke-opacity=".28" stroke-width="1.6"/></pattern>
+        <pattern id="${id}a" width="9" height="9" patternUnits="userSpaceOnUse"><circle cx="4.5" cy="4.5" r="1.7" fill="#fff" fill-opacity=".45"/></pattern>
+      </defs>
+      <ellipse cx="160" cy="200" rx="122" ry="8" fill="#1A1D29" opacity=".08"/>
+      <path d="${PAD_BODY}" fill="${esc(hex)}" fill-opacity="${clear ? 0.55 : 1}"/>
+      <g clip-path="url(#${id}c)">
+        ${clear ? `<rect x="58" y="58" width="204" height="76" rx="10" fill="#2B7A57" opacity=".28"/>
+          <path d="M70 70h50v14h30M250 72h-40v20h-30M90 120h40l10-12h40M230 118h-30" fill="none" stroke="#1A1D29" stroke-opacity=".22" stroke-width="2"/>
+          <circle cx="160" cy="96" r="9" fill="#1A1D29" opacity=".18"/>` : ''}
+        ${pattern === 'dragon' ? `<rect width="320" height="210" fill="url(#${id}d)"/>` : ''}
+        ${pattern === 'anime' ? `<rect width="320" height="210" fill="url(#${id}a)"/><path d="M90 60l3 8 8 3-8 3-3 8-3-8-8-3 8-3zM235 150l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" fill="#fff" opacity=".8"/>` : ''}
+        <rect width="320" height="210" fill="url(#${id}s)"/>
+      </g>
+      <path d="${PAD_BODY}" fill="none" stroke="rgba(26,29,41,.35)" stroke-width="2"/>
+      <rect x="120" y="44" width="80" height="44" rx="9" fill="${dark ? 'rgba(255,255,255,.12)' : 'rgba(255,255,255,.4)'}" stroke="${btnRing}" stroke-width="1.5"/>
+      <path d="M72 80h12v-12h12v12h12v12h-12v12h-12v-12h-12z" fill="${btn}"/>
+      <g fill="${btn}"><circle cx="242" cy="70" r="7.5"/><circle cx="242" cy="104" r="7.5"/><circle cx="225" cy="87" r="7.5"/><circle cx="259" cy="87" r="7.5"/></g>
+      <g><circle cx="122" cy="122" r="18" fill="${btn}"/><circle cx="122" cy="122" r="11" fill="none" stroke="${btnRing}" stroke-width="3"/>
+        <circle cx="198" cy="122" r="18" fill="${btn}"/><circle cx="198" cy="122" r="11" fill="none" stroke="${btnRing}" stroke-width="3"/></g>
+      <rect x="146" y="98" width="28" height="4" rx="2" fill="${btn}" opacity=".7"/>
+    </svg>`;
+  }
+
+  // A hacked calculator with a little game running on its screen.
+  function calcArt(cls) {
+    const keys = [];
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 4; c++) {
+      const accent = (r === 4 && c === 3) || (r === 0 && c === 3);
+      keys.push(`<rect x="${34 + c * 34}" y="${142 + r * 28}" width="26" height="19" rx="5" fill="${accent ? '#F5A524' : '#3A3F50'}"/>`);
+    }
+    const snake = [[4, 3], [5, 3], [6, 3], [6, 4], [6, 5], [7, 5], [8, 5]].map(([x, y]) => `<rect x="${42 + x * 9}" y="${38 + y * 9}" width="8" height="8" fill="#2E3A1F"/>`).join('');
+    const blocks = [[11, 7], [12, 7], [12, 6], [13, 7], [10, 8], [11, 8], [12, 8], [13, 8], [14, 8]].map(([x, y]) => `<rect x="${42 + x * 9}" y="${38 + y * 9}" width="8" height="8" fill="#2E3A1F" opacity=".75"/>`).join('');
+    return `<svg class="art art-calc ${cls || ''}" viewBox="0 0 200 300" aria-hidden="true">
+      <ellipse cx="100" cy="292" rx="80" ry="6" fill="#1A1D29" opacity=".08"/>
+      <rect x="14" y="8" width="172" height="278" rx="22" fill="#262A36"/>
+      <rect x="14" y="8" width="172" height="278" rx="22" fill="none" stroke="#1A1D29" stroke-width="2"/>
+      <rect x="20" y="14" width="160" height="40" rx="16" fill="#fff" opacity=".05"/>
+      <rect x="30" y="26" width="140" height="100" rx="8" fill="#9FB386"/>
+      <rect x="30" y="26" width="140" height="100" rx="8" fill="none" stroke="#1A1D29" stroke-opacity=".4" stroke-width="2"/>
+      ${snake}${blocks}<rect x="114" y="56" width="8" height="8" fill="#B9402F"/>
+      <text x="40" y="118" font-family="monospace" font-size="10" fill="#2E3A1F" opacity=".8">SCORE 2048</text>
+      ${keys.join('')}
+    </svg>`;
+  }
+
+  const orderArt = (o, cls) => (o.business === 'cs' ? controllerArt(swatchOf(o), o.colourName, cls) : calcArt(cls));
+
+  function spark(values, color) {
+    const w = 120, h = 36, max = Math.max(...values, 1);
+    const pts = values.map((v, i) => [i * (w / Math.max(values.length - 1, 1)), h - 3 - (v / max) * (h - 8)]);
+    const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
+    return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <path d="${line}L${w} ${h}L0 ${h}Z" fill="${color}" opacity=".12"/><path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>`;
+  }
+
+  function weekBuckets(orders, weeks, fn) {
+    const end = startOfDay(new Date()).getTime() + DAYMS;
+    return Array.from({ length: weeks }, (_, i) => {
+      const to = end - (weeks - 1 - i) * 7 * DAYMS, from = to - 7 * DAYMS;
+      return orders.filter((o) => o.createdAt >= from && o.createdAt < to).reduce((s, o) => s + fn(o), 0);
+    });
+  }
+
+  function monthKeys(n) {
+    const now = new Date();
+    return Array.from({ length: n }, (_, k) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (n - 1 - k), 1);
+      return { y: d.getFullYear(), m: d.getMonth(), label: d.toLocaleDateString('en-GB', { month: 'short' }), long: d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) };
+    });
+  }
+  function revenueSeries(orders, months, bizList) {
+    return bizList.map((b) => ({
+      key: b, name: bizName(b), color: CHART[b],
+      values: months.map((mo) => live(orders).filter((o) => o.business === b && new Date(o.createdAt).getFullYear() === mo.y && new Date(o.createdAt).getMonth() === mo.m).reduce((s, o) => s + num(o.price), 0))
+    }));
+  }
+
+  // Round axis: a 1, 2 or 5 step and a max that is a whole number of steps.
+  function niceAxis(v) {
+    if (v <= 0) return { max: 100, step: 25 };
+    const raw = v / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / p;
+    const step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
+    return { max: Math.ceil(v / step) * step, step };
+  }
+
+  // Stacked bar chart: thin bars, 2px gaps between segments, rounded tops, recessive grid,
+  // hover tooltip per month, and a table view for exact numbers.
+  function drawBarChart(host, cfg) {
+    const { months, series } = cfg;
+    const H = cfg.height || 240;
+    const W = Math.max(host.clientWidth || 600, 280);
+    const padL = 48, padR = 6, padT = 14, padB = 30;
+    const iw = W - padL - padR, ih = H - padT - padB;
+    const totals = months.map((_, i) => series.reduce((s, se) => s + se.values[i], 0));
+    const axis = niceAxis(Math.max(...totals));
+    const max = axis.max;
+    const band = iw / months.length, bw = Math.min(34, band * 0.55);
+    const yv = (v) => (v / max) * ih;
+    const base = padT + ih;
+    let svg = '';
+    for (let v = 0; v <= max + 1e-9; v += axis.step) {
+      const yy = base - yv(v), t = v;
+      svg += `<line x1="${padL}" x2="${W - padR}" y1="${yy}" y2="${yy}" class="${t ? 'gl' : 'bl'}"/><text x="${padL - 8}" y="${yy + 4}" class="yl">${shortMoney(v)}</text>`;
+    }
+    const step = band < 30 ? 2 : 1;
+    months.forEach((mo, i) => {
+      const x = padL + band * i + (band - bw) / 2;
+      svg += `<rect class="hl" data-i="${i}" x="${padL + band * i + 2}" y="${padT}" width="${band - 4}" height="${ih}" rx="6"/>`;
+      let y0 = base;
+      const segs = series.map((se) => se.values[i]).map((v, k) => ({ v, k })).filter((s) => s.v > 0);
+      segs.forEach((s, j) => {
+        const h = yv(s.v), top = j === segs.length - 1;
+        const y1 = y0 - h, y2 = y0 - (j ? 2 : 0);
+        const hh = Math.max(y2 - y1, 1), r = top ? Math.min(4, hh) : 0;
+        svg += `<path fill="${series[s.k].color}" d="M${x} ${y2}V${y1 + r}${r ? `Q${x} ${y1} ${x + r} ${y1}` : ''}H${x + bw - r}${r ? `Q${x + bw} ${y1} ${x + bw} ${y1 + r}` : ''}V${y2}Z"/>`;
+        y0 = y1;
+      });
+      if (i % step === 0 || i === months.length - 1) svg += `<text x="${x + bw / 2}" y="${H - 9}" class="xl">${esc(mo.label)}</text>`;
+      svg += `<rect class="hit" data-i="${i}" x="${padL + band * i}" y="${padT}" width="${band}" height="${ih + padB}"/>`;
+    });
+    host.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(cfg.label || 'Revenue by month')}">${svg}</svg><div class="tip" hidden></div>`;
+    const tip = $('.tip', host);
+    $$('.hit', host).forEach((r) => {
+      r.addEventListener('mouseenter', () => {
+        const i = Number(r.dataset.i);
+        $$('.hl', host).forEach((h) => h.classList.toggle('on', h.dataset.i === r.dataset.i));
+        tip.innerHTML = `<b>${esc(months[i].long)}</b>${series.map((se) => `<div><i style="background:${se.color}"></i>${esc(se.name)}<span>${money(se.values[i])}</span></div>`).join('')}${series.length > 1 ? `<div class="tt"><i></i>Total<span>${money(totals[i])}</span></div>` : ''}`;
+        tip.hidden = false;
+        const cx = padL + band * i + band / 2;
+        tip.style.left = Math.min(Math.max(cx - tip.offsetWidth / 2, 0), W - tip.offsetWidth) + 'px';
+        tip.style.top = Math.max(base - yv(totals[i]) - tip.offsetHeight - 10, 0) + 'px';
+      });
+    });
+    host.addEventListener('mouseleave', () => { tip.hidden = true; $$('.hl', host).forEach((h) => h.classList.remove('on')); });
+    host.__draw = () => drawBarChart(host, cfg);
+  }
+
+  function chartTable(cfg) {
+    return `<table class="table ctable"><thead><tr><th>Month</th>${cfg.series.map((se) => `<th class="r">${esc(se.name)}</th>`).join('')}${cfg.series.length > 1 ? '<th class="r">Total</th>' : ''}</tr></thead>
+      <tbody>${cfg.months.map((mo, i) => `<tr style="cursor:default"><td>${esc(mo.long)}</td>${cfg.series.map((se) => `<td class="r num">${money(se.values[i])}</td>`).join('')}${cfg.series.length > 1 ? `<td class="r num"><b>${money(cfg.series.reduce((s, se) => s + se.values[i], 0))}</b></td>` : ''}</tr>`).join('')}</tbody></table>`;
+  }
+
+  // A chart card with legend, a chart/table toggle and redraw on resize.
+  function chartCard(id, title, cfg) {
+    return `<section class="card chartcard" id="${id}">
+      <div class="card-head"><h2>${hchip('chart')}${esc(title)}</h2>
+        <div class="legend">${cfg.series.length > 1 ? cfg.series.map((se) => `<span><i style="background:${se.color}"></i>${esc(se.name)}</span>`).join('') : ''}
+          <div class="seg sm"><label><input type="radio" name="${id}v" value="chart" checked><span>Chart</span></label><label><input type="radio" name="${id}v" value="table"><span>Table</span></label></div></div></div>
+      <div class="card-pad"><div class="chartbox" data-chart></div></div>
+    </section>`;
+  }
+  function mountChart(id, cfg) {
+    const card = document.getElementById(id);
+    if (!card) return;
+    const box = $('.chartbox', card);
+    const show = (mode) => { if (mode === 'table') { box.__draw = null; box.innerHTML = chartTable(cfg); } else drawBarChart(box, cfg); };
+    $$(`input[name=${id}v]`, card).forEach((r) => r.addEventListener('change', () => show(r.value)));
+    show('chart');
+  }
+
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => $$('[data-chart]').forEach((h) => h.__draw && h.__draw()), 120);
+  });
+
+  function pipelineBar(orders) {
+    const open = orders.filter((o) => o.status !== 'cancelled');
+    const total = open.length || 1;
+    return `<div class="pipe">${OT.STATUSES.map((s) => {
+      const c = open.filter((o) => o.status === s.id).length;
+      return c ? `<span style="flex:${c};background:${STATUS_COLOR[s.id]}" title="${s.label}: ${c}"></span>` : '';
+    }).join('') || '<span style="flex:1;background:var(--sunken)"></span>'}</div>
+    <div class="pipe-legend">${OT.STATUSES.map((s) => `<span><i style="background:${STATUS_COLOR[s.id]}"></i>${s.label}<b>${open.filter((o) => o.status === s.id).length}</b></span>`).join('')}</div>`;
+  }
+
+  function barList(rows, color, empty) {
+    if (!rows.length) return `<p class="muted small-note">${empty || 'Nothing to show yet.'}</p>`;
+    const max = Math.max(...rows.map((r) => r.value), 1);
+    return `<ul class="barlist">${rows.map((r) => `<li><div class="bl-top"><span class="bl-label">${r.label}</span><span class="bl-val">${r.display}</span></div>
+      <div class="bl-track"><i style="width:${Math.max((r.value / max) * 100, 2)}%;background:${r.color || color}"></i></div></li>`).join('')}</ul>`;
+  }
+
+  function paymentStats(orders) {
+    const today = startOfDay(new Date());
+    const out = { outstanding: 0, collected: 0, overdueCount: 0, overdueAmount: 0, overdue: [] };
+    for (const o of live(orders)) {
+      const p = o.payment || { method: 'upfront' };
+      if (p.method === 'finance') {
+        OT.paymentSchedule(o).forEach((x) => {
+          if (x.paid) out.collected += x.amount;
+          else {
+            out.outstanding += x.amount;
+            if (x.due < today) { out.overdueCount++; out.overdueAmount += x.amount; out.overdue.push({ o, x }); }
+          }
+        });
+      } else if (p.paid) out.collected += num(o.price);
+      else out.outstanding += num(o.price);
+    }
+    return out;
+  }
+
+  function dueBadge(o) {
+    if (o.status === 'cancelled' || o.status === 'delivered') return '';
+    const t = OT.turnaround(S(), o);
+    if (!t) return ['confirmed', 'in_progress'].includes(o.status) ? `<span class="due wait">${o.business === 'cs' ? 'Controller' : 'Calculator'} not received</span>` : '';
+    if (t.state === 'overdue') return `<span class="due bad">${icon('alert')}Overdue ${-t.daysLeft}d</span>`;
+    if (t.state === 'due_soon') return `<span class="due warn">${icon('clock')}${t.daysLeft === 0 ? 'Due today' : `Due in ${t.daysLeft}d`}</span>`;
+    if (t.state === 'on_track') return `<span class="due ok">${icon('clock')}Due ${t.by.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>`;
+    return '';
+  }
+
+  // ---------- Home ----------
+  function attentionItems() {
+    const items = [];
+    const s = S();
+    for (const o of DB.orders.filter(OT.isOpen)) {
+      const t = OT.turnaround(s, o);
+      if (t && t.state === 'overdue') items.push({ tone: 'bad', icon: 'alert', title: `${o.orderId} is overdue by ${-t.daysLeft} day${t.daysLeft === -1 ? '' : 's'}`, sub: `${o.customerName}, was due ${fmtDate(t.by)}`, open: o.id, rank: 0 });
+      else if (t && t.state === 'due_soon') items.push({ tone: 'warn', icon: 'clock', title: `${o.orderId} is due ${t.daysLeft === 0 ? 'today' : `in ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}`}`, sub: `${o.customerName}, ship by ${fmtDate(t.by)}`, open: o.id, rank: 1 });
+    }
+    paymentStats(DB.orders).overdue.forEach(({ o, x }) => items.push({ tone: 'bad', icon: 'coins', title: `Payment ${x.n} for ${o.orderId} is overdue`, sub: `${money(x.amount)} from ${o.customerName}, due ${fmtDate(x.due)}`, open: o.id, rank: 0 }));
+    OT.lowStock(s).forEach((x) => items.push({ tone: OT.stockState(x) === 'out' ? 'bad' : 'warn', icon: 'box', title: OT.stockState(x) === 'out' ? `${x.name} is out of stock` : `${x.name} is running low`, sub: `${num(x.stock)} left`, nav: 'stock', rank: 2 }));
+    for (const b of ['cs', 'hack']) {
+      const n = DB.orders.filter((o) => o.business === b && o.status === 'pending').length;
+      if (n) items.push({ tone: 'info', icon: 'check', title: `${n} ${bizName(b)} order${n === 1 ? '' : 's'} to confirm`, sub: 'Waiting since they were created', pending: b, rank: 3 });
+    }
+    return items.sort((a, b) => a.rank - b.rank);
+  }
+
+  function activityFeed(limit) {
+    const ev = [];
+    DB.orders.forEach((o) => (o.history || []).forEach((h, i) => ev.push({ o, h, first: i === 0 })));
+    return ev.sort((a, b) => b.h.at - a.h.at).slice(0, limit);
+  }
+
+  function renderHome() {
+    const now = new Date();
+    const hr = now.getHours();
+    const greet = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
+    const orders = DB.orders;
+    const L = live(orders);
+    const ms = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const pms = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+    const thisMonth = L.filter((o) => o.createdAt >= ms).reduce((s, o) => s + num(o.price), 0);
+    const lastMonth = L.filter((o) => o.createdAt >= pms && o.createdAt < ms).reduce((s, o) => s + num(o.price), 0);
+    const delta = lastMonth ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : null;
+    const open = orders.filter(OT.isOpen);
+    const dueWeek = open.filter((o) => { const t = OT.turnaround(S(), o); return t && t.daysLeft != null && t.daysLeft <= 7; });
+    const overdue = dueWeek.filter((o) => OT.turnaround(S(), o).state === 'overdue').length;
+    const pay = paymentStats(orders);
+    const att = attentionItems();
+    const feed = activityFeed(7);
+    const months = monthKeys(6);
+    const cfg = { months, series: revenueSeries(orders, months, ['cs', 'hack']), height: 300, label: 'Revenue for the last 6 months' };
+    const custs = OT.customers(orders).sort((a, b) => b.total - a.total).slice(0, 5);
+    const lastMonthName = new Date(now.getFullYear(), now.getMonth() - 1, 1).toLocaleDateString('en-GB', { month: 'long' });
+
+    if (!orders.length) {
+      main.innerHTML = `<div class="welcome card">
+        <div class="w-art">${controllerArt('#FF6B5A', 'scarlet')}${calcArt()}</div>
+        <div class="w-text"><div class="crumb"><span class="bar"></span>Welcome</div><h1>${greet}. <em>Let's get your first order in.</em></h1>
+          <p class="lede">OrderTrack keeps ${esc(bizName('cs'))} and ${esc(bizName('hack'))} orders, customers, payments and stock in one place.</p>
+          <ol class="steps-list">
+            <li><b>Set up email</b><span>So customers get status updates and invoices.</span><button class="btn sm" data-nav="settings">Open Settings</button></li>
+            <li><b>Add your stock</b><span>Track shells per colour and get low stock warnings.</span><button class="btn sm" data-nav="stock">Open Stock</button></li>
+            <li><b>Create an order</b><span>Everything else fills in from there.</span>
+              <span class="row-btns"><button class="btn sm primary" data-action="new" data-biz="cs">${icon('plus')}${esc(bizName('cs'))}</button><button class="btn sm" data-action="new" data-biz="hack">${icon('plus')}${esc(bizName('hack'))}</button></span></li>
+          </ol></div></div>`;
+      return;
+    }
+
+    main.innerHTML = `
+      <div class="pagehead home-head">
+        <div><div class="crumb"><span class="bar"></span>${now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+          <h1>${greet}. <em>${att.length ? `${att.length} thing${att.length === 1 ? '' : 's'} need${att.length === 1 ? 's' : ''} you.` : 'All caught up.'}</em></h1></div>
+        <div class="head-actions"><button class="btn lg" data-action="new" data-biz="hack" style="--accent:var(--amber)">${icon('plus')}${esc(bizName('hack'))}</button><button class="btn primary lg" data-action="new" data-biz="cs">${icon('plus')}${esc(bizName('cs'))} order</button></div>
+      </div>
+
+      <div class="tiles4">
+        <div class="card tile4"><div class="t4-top">${hchip('trend')}<span>Revenue this month</span></div><div class="t4-v">${money(thisMonth)}</div>
+          <div class="t4-sub">${delta == null ? 'No orders last month' : `<span class="${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : ''}${delta}%</span> vs ${lastMonthName}`}</div>${spark(weekBuckets(L, 8, (o) => num(o.price)), '#F06A55')}</div>
+        <div class="card tile4"><div class="t4-top">${hchip('box')}<span>Open orders</span></div><div class="t4-v">${open.length}</div>
+          <div class="t4-sub">${open.filter((o) => o.status === 'in_progress').length} in progress, ${open.filter((o) => o.status === 'shipped').length} shipped</div>${spark(weekBuckets(orders, 8, () => 1), '#3456A3')}</div>
+        <div class="card tile4"><div class="t4-top">${hchip('clock')}<span>Due this week</span></div><div class="t4-v">${dueWeek.length}</div>
+          <div class="t4-sub">${overdue ? `<span class="down">${overdue} overdue</span>` : 'Nothing overdue'}</div>
+          <div class="mini-dots">${dueWeek.slice(0, 12).map((o) => `<i class="${OT.turnaround(S(), o).state}"></i>`).join('')}</div></div>
+        <div class="card tile4"><div class="t4-top">${hchip('coins')}<span>Still to collect</span></div><div class="t4-v">${money(pay.outstanding)}</div>
+          <div class="t4-sub">${pay.overdueCount ? `<span class="down">${pay.overdueCount} payment${pay.overdueCount === 1 ? '' : 's'} overdue</span>` : `${money(pay.collected)} collected`}</div>
+          <div class="progress slim"><i style="width:${Math.round((pay.collected / Math.max(pay.collected + pay.outstanding, 1)) * 100)}%"></i></div></div>
+      </div>
+
+      <div class="home-grid">
+        <section class="card attention">
+          <div class="card-head"><h2>${hchip('alert')}Needs attention</h2><span class="meta">${att.length || 'None'}</span></div>
+          <div class="card-pad">${att.length ? `<ul class="att">${att.slice(0, 6).map((a) => `<li class="${a.tone}"><button ${a.open ? `data-open="${a.open}"` : a.nav ? `data-nav="${a.nav}"` : `data-action="showPending" data-biz="${a.pending}"`}>
+              <span class="att-ic">${icon(a.icon)}</span><span class="att-t"><b>${esc(a.title)}</b><span>${esc(a.sub)}</span></span>${icon('chev')}</button></li>`).join('')}</ul>${att.length > 6 ? `<p class="muted small-note">And ${att.length - 6} more. Overdue items also show on each order.</p>` : ''}`
+            : `<div class="caught"><div class="art-ok">${icon('check')}</div><b>All caught up</b><span>No overdue orders, late payments or low stock.</span></div>`}</div>
+        </section>
+        <div class="stack">
+          ${['cs', 'hack'].map((b) => {
+            const bo = orders.filter((o) => o.business === b);
+            const rev = live(bo).filter((o) => o.createdAt >= ms).reduce((s, o) => s + num(o.price), 0);
+            return `<section class="card bizcard ${b}" data-biz="${b}">
+              <div class="bz-art">${b === 'cs' ? controllerArt('#FF6B5A', 'scarlet') : calcArt()}</div>
+              <div class="bz-body"><div class="bz-head"><h2>${esc(bizName(b))}</h2><button class="btn sm" data-nav="${b}">View orders${icon('chev')}</button></div>
+                <div class="bz-stats"><div><b>${bo.filter(OT.isOpen).length}</b><span>open</span></div><div><b>${money(rev)}</b><span>this month</span></div><div><b>${bo.length}</b><span>all time</span></div></div>
+                ${pipelineBar(bo)}</div>
+            </section>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div class="home-grid two">
+        ${chartCard('homeChart', 'Revenue, last 6 months', cfg)}
+        <section class="card">
+          <div class="card-head"><h2>${hchip('clock')}Recent activity</h2></div>
+          <div class="card-pad"><ul class="feed">${feed.map(({ o, h, first }) => `<li data-open="${o.id}">${avatar(o.customerName, custKey(o))}
+            <div><b>${esc(o.orderId)}</b> ${first ? 'created' : h.note ? esc(h.note.charAt(0).toLowerCase() + h.note.slice(1)) : h.status === 'cancelled' ? 'cancelled' : `marked as ${esc(OT.statusLabel(h.status))}`}
+            <span class="sub">${esc(o.customerName)}, ${ago(h.at)}</span></div>${!first && !h.note ? pill(h.status) : ''}</li>`).join('')}</ul></div>
+        </section>
+      </div>
+
+      <div class="home-grid two">
+        <section class="card">
+          <div class="card-head"><h2>${hchip('users')}Top customers</h2><button class="btn sm ghost" data-nav="customers">All customers${icon('chev')}</button></div>
+          <div class="card-pad">${barList(custs.map((c) => ({ label: `${avatar(c.name, c.key)}<span>${esc(c.name)}<em>${c.orders.length} order${c.orders.length === 1 ? '' : 's'}</em></span>`, value: c.total, display: money(c.total) })), '#868892')}</div>
+        </section>
+        <section class="card">
+          <div class="card-head"><h2>${hchip('box')}Stock</h2><button class="btn sm ghost" data-nav="stock">Manage stock${icon('chev')}</button></div>
+          <div class="card-pad">${stockSnapshot()}</div>
+        </section>
+      </div>`;
+    mountChart('homeChart', cfg);
+  }
+
+  function stockSnapshot() {
+    const tracked = [...S().cs.colours, ...(S().parts || [])].filter((x) => x.stock != null);
+    if (!tracked.length) return `<div class="caught"><div class="art-ok neutral">${icon('box')}</div><b>Stock is not tracked yet</b><span>Add counts on the Stock page to get low stock warnings.</span><button class="btn sm" data-nav="stock">Set up stock</button></div>`;
+    const rows = tracked.sort((a, b) => num(a.stock) - num(b.stock)).slice(0, 6);
+    return `<ul class="stocklist">${rows.map((x) => `<li>${x.swatch ? swatch(x.swatch) : `<span class="calcmark">${icon('box')}</span>`}<span>${esc(x.name)}</span><span class="stk ${OT.stockState(x)}">${stockLabel(x)}</span></li>`).join('')}</ul>`;
+  }
+
+  const stockLabel = (x) => ({ untracked: 'Not tracked', out: 'Out of stock', low: `${num(x.stock)} left`, ok: `${num(x.stock)} in stock` })[OT.stockState(x)];
+
+  // ---------- Reports ----------
+  const reportState = { period: 'year', biz: 'both' };
+  function renderReports() {
+    const st = reportState;
+    const now = new Date();
+    const starts = { month: new Date(now.getFullYear(), now.getMonth(), 1), quarter: new Date(now.getFullYear(), now.getMonth() - 2, 1), year: new Date(now.getFullYear(), 0, 1), all: new Date(0) };
+    const bizList = st.biz === 'both' ? ['cs', 'hack'] : [st.biz];
+    const scope = live(DB.orders).filter((o) => bizList.includes(o.business) && o.createdAt >= starts[st.period].getTime());
+    const revenue = scope.reduce((s, o) => s + num(o.price), 0);
+    const discounts = scope.reduce((s, o) => s + (o.discount ? num(o.discount.amount) : 0), 0);
+    const pay = paymentStats(scope);
+    const months = monthKeys(12);
+    const cfg = { months, series: revenueSeries(DB.orders, months, bizList), height: 260, label: 'Revenue by month' };
+    const cs = scope.filter((o) => o.business === 'cs'), hk = scope.filter((o) => o.business === 'hack');
+    const group = (arr, key) => { const m = new Map(); arr.forEach((o) => { const k = key(o); if (!k) return; const g = m.get(k) || { n: 0, rev: 0, o }; g.n++; g.rev += num(o.price); m.set(k, g); }); return [...m.entries()].sort((a, b) => b[1].n - a[1].n || b[1].rev - a[1].rev); };
+    const colours = group(cs, (o) => o.colourName).slice(0, 8);
+    const models = group(cs, (o) => o.model);
+    const donors = group(hk, (o) => o.donor).slice(0, 6);
+    const games = group(hk.flatMap((o) => (o.extraGames || []).map((g) => ({ ...o, _g: g, price: 0 }))), (o) => o._g).slice(0, 6);
+    const turn = scope.map((o) => ({ o, t: OT.turnaround(S(), o) })).filter((x) => x.t && x.t.daysTaken != null);
+    const avgOf = (arr) => (arr.length ? (arr.reduce((s, x) => s + x.t.daysTaken, 0) / arr.length) : null);
+    const tGroups = [
+      ['ClearSense express', turn.filter((x) => x.o.business === 'cs' && x.o.delivery === 'express')],
+      ['ClearSense non express', turn.filter((x) => x.o.business === 'cs' && x.o.delivery !== 'express')],
+      [bizName('hack'), turn.filter((x) => x.o.business === 'hack')]
+    ].filter(([, a]) => a.length);
+    const onTime = turn.filter((x) => x.t.state === 'on_time').length;
+    const fin = scope.filter((o) => o.payment && o.payment.method === 'finance').length;
+    const seg = (name, val, label) => `<label><input type="radio" name="${name}" value="${val}" ${st[name === 'rp' ? 'period' : 'biz'] === val ? 'checked' : ''}><span>${label}</span></label>`;
+
+    main.innerHTML = `
+      <div class="pagehead"><div><div class="crumb"><span class="bar"></span>Insights</div><h1>Reports</h1><p class="lede">How the businesses are doing. Cancelled orders are left out.</p></div>
+        <div class="report-controls">
+          <div class="seg">${seg('rp', 'month', 'This month')}${seg('rp', 'quarter', '3 months')}${seg('rp', 'year', 'This year')}${seg('rp', 'all', 'All time')}</div>
+          <div class="seg">${seg('rb', 'both', 'Both')}${seg('rb', 'cs', esc(bizName('cs')))}${seg('rb', 'hack', esc(bizName('hack')))}</div>
+        </div></div>
+
+      <div class="tiles4 five">
+        <div class="card tile4"><div class="t4-top">${hchip('trend')}<span>Revenue</span></div><div class="t4-v">${money(revenue)}</div><div class="t4-sub">${scope.length} order${scope.length === 1 ? '' : 's'}</div></div>
+        <div class="card tile4"><div class="t4-top">${hchip('tag')}<span>Average order</span></div><div class="t4-v">${money(scope.length ? revenue / scope.length : 0)}</div><div class="t4-sub">after discounts</div></div>
+        <div class="card tile4"><div class="t4-top">${hchip('tag')}<span>Discounts given</span></div><div class="t4-v">${money(discounts)}</div><div class="t4-sub">${scope.filter((o) => o.discount && o.discount.amount > 0).length} discounted orders</div></div>
+        <div class="card tile4"><div class="t4-top">${hchip('coins')}<span>Still to collect</span></div><div class="t4-v">${money(pay.outstanding)}</div><div class="t4-sub">${pay.overdueCount ? `<span class="down">${money(pay.overdueAmount)} overdue</span>` : `${money(pay.collected)} collected`}</div></div>
+        <div class="card tile4"><div class="t4-top">${hchip('truck')}<span>On time</span></div><div class="t4-v">${turn.length ? Math.round((onTime / turn.length) * 100) + '%' : 'No data'}</div><div class="t4-sub">${turn.length} shipped with a received date</div></div>
+      </div>
+
+      ${chartCard('repChart', 'Revenue by month, last 12 months', cfg)}
+
+      <div class="home-grid two" style="margin-top:16px">
+        ${st.biz !== 'hack' ? `<section class="card"><div class="card-head"><h2>${hchip('pad')}Top colours</h2><span class="meta">${esc(bizName('cs'))}</span></div>
+          <div class="card-pad">${barList(colours.map(([k, g]) => ({ label: `${swatch(swatchOf(g.o))}<span>${esc(k)}<em>${money(g.rev)}</em></span>`, value: g.n, display: `${g.n} order${g.n === 1 ? '' : 's'}` })), CHART.cs, 'No ClearSense orders in this period.')}</div></section>
+        <section class="card"><div class="card-head"><h2>${hchip('pad')}BDM models</h2><span class="meta">${esc(bizName('cs'))}</span></div>
+          <div class="card-pad">${barList(models.map(([k, g]) => ({ label: `<span>${esc(k)}<em>${money(g.rev)}</em></span>`, value: g.n, display: `${g.n} order${g.n === 1 ? '' : 's'}` })), CHART.cs, 'No ClearSense orders in this period.')}</div></section>` : ''}
+        ${st.biz !== 'cs' ? `<section class="card"><div class="card-head"><h2>${hchip('calc')}Donor calculators</h2><span class="meta">${esc(bizName('hack'))}</span></div>
+          <div class="card-pad">${barList(donors.map(([k, g]) => ({ label: `<span>${esc(k)}<em>${money(g.rev)}</em></span>`, value: g.n, display: `${g.n} order${g.n === 1 ? '' : 's'}` })), CHART.hack, 'No Hackulator orders in this period.')}</div></section>
+        <section class="card"><div class="card-head"><h2>${hchip('calc')}Most wanted extra games</h2><span class="meta">${esc(bizName('hack'))}</span></div>
+          <div class="card-pad">${barList(games.map(([k, g]) => ({ label: `<span>${esc(k)}</span>`, value: g.n, display: `${g.n} order${g.n === 1 ? '' : 's'}` })), CHART.hack, 'No extra games ordered in this period.')}</div></section>` : ''}
+        <section class="card"><div class="card-head"><h2>${hchip('box')}Orders by status</h2></div>
+          <div class="card-pad">${pipelineBar(DB.orders.filter((o) => bizList.includes(o.business) && o.createdAt >= starts[st.period].getTime()))}</div></section>
+        <section class="card"><div class="card-head"><h2>${hchip('coins')}Payments</h2></div>
+          <div class="card-pad"><dl class="dl">
+            <dt>Paid upfront</dt><dd>${scope.length - fin} order${scope.length - fin === 1 ? '' : 's'}</dd>
+            <dt>On finance</dt><dd>${fin} order${fin === 1 ? '' : 's'}</dd>
+            <dt>Collected</dt><dd class="num">${money(pay.collected)}</dd>
+            <dt>Still to collect</dt><dd class="num">${money(pay.outstanding)}</dd>
+            <dt>Overdue</dt><dd class="num">${pay.overdueCount ? `<span class="down">${money(pay.overdueAmount)}, ${pay.overdueCount} payment${pay.overdueCount === 1 ? '' : 's'}</span>` : 'None'}</dd></dl>
+            <div class="progress" style="margin-top:14px"><i style="width:${Math.round((pay.collected / Math.max(pay.collected + pay.outstanding, 1)) * 100)}%"></i></div></div></section>
+        <section class="card"><div class="card-head"><h2>${hchip('truck')}Turnaround</h2><span class="meta">received to shipped</span></div>
+          <div class="card-pad">${tGroups.length ? barList(tGroups.map(([k, a]) => ({ label: `<span>${esc(k)}<em>${a.length} shipped, ${a.filter((x) => x.t.state === 'on_time').length} on time</em></span>`, value: avgOf(a), display: `${avgOf(a).toFixed(1)} days avg` })), '#3456A3') : '<p class="muted small-note">Mark orders as received to start measuring turnaround.</p>'}</div></section>
+        <section class="card"><div class="card-head"><h2>${hchip('users')}Top customers</h2></div>
+          <div class="card-pad">${barList(OT.customers(scope).sort((a, b) => b.total - a.total).slice(0, 6).map((c) => ({ label: `${avatar(c.name, c.key)}<span>${esc(c.name)}<em>${c.orders.length} order${c.orders.length === 1 ? '' : 's'}</em></span>`, value: c.total, display: money(c.total) })), '#868892', 'No orders in this period.')}</div></section>
+      </div>`;
+    $$('input[name=rp]').forEach((r) => r.onchange = () => { st.period = r.value; renderReports(); });
+    $$('input[name=rb]').forEach((r) => r.onchange = () => { st.biz = r.value; renderReports(); });
+    mountChart('repChart', cfg);
+  }
+
+  // ---------- Stock ----------
+  function renderStock() {
+    const s = S();
+    const all = [...s.cs.colours, ...(s.parts || [])];
+    const tracked = all.filter((x) => x.stock != null);
+    const low = all.filter((x) => OT.stockState(x) === 'low').length, out = all.filter((x) => OT.stockState(x) === 'out').length;
+    const stepper = (kind, id, x) => x.stock == null
+      ? `<button class="btn sm" data-action="trackStock" data-kind="${kind}" data-id="${id}">${icon('plus')}Track stock</button>`
+      : `<div class="stepper sm"><button type="button" data-action="stockStep" data-kind="${kind}" data-id="${id}" data-step="-1" aria-label="One less">${icon('minus')}</button><input type="number" data-stock="${kind}:${id}" value="${esc(x.stock)}" aria-label="Stock"><button type="button" data-action="stockStep" data-kind="${kind}" data-id="${id}" data-step="1" aria-label="One more">${icon('plus')}</button></div>`;
+    main.innerHTML = `
+      <div class="pagehead"><div><div class="crumb"><span class="bar"></span>Inventory</div><h1>Stock</h1><p class="lede">Stock goes down by one when an order is created and back up if it is cancelled or deleted before shipping.</p></div></div>
+      <div class="tiles4">
+        <div class="card tile4"><div class="t4-top">${hchip('box')}<span>Items tracked</span></div><div class="t4-v">${tracked.length}</div><div class="t4-sub">of ${all.length} colours and parts</div></div>
+        <div class="card tile4"><div class="t4-top">${hchip('pad')}<span>Shells in stock</span></div><div class="t4-v">${s.cs.colours.filter((c) => c.stock != null).reduce((t, c) => t + Math.max(num(c.stock), 0), 0)}</div><div class="t4-sub">across all colours</div></div>
+        <div class="card tile4"><div class="t4-top">${hchip('alert')}<span>Running low</span></div><div class="t4-v">${low}</div><div class="t4-sub">at or below the warning level</div></div>
+        <div class="card tile4"><div class="t4-top">${hchip('alert')}<span>Out of stock</span></div><div class="t4-v">${out}</div><div class="t4-sub">${out ? '<span class="down">Restock soon</span>' : 'Nothing out'}</div></div>
+      </div>
+      <section class="card sset">
+        <div class="sset-head"><h2>${esc(bizName('cs'))} shells</h2><p>One shell is used per order in that colour. Set the warning level to get a low stock alert on the Home page.</p></div>
+        <div class="sset-body"><div class="shellgrid">${s.cs.colours.map((c) => `<div class="shell ${OT.stockState(c)}">
+            <div class="sh-art">${controllerArt(c.swatch, c.name)}</div>
+            <div class="sh-name"><b>${esc(c.name)}</b><span class="stk ${OT.stockState(c)}">${stockLabel(c)}</span></div>
+            <div class="sh-ctl">${stepper('colour', c.id, c)}${c.stock != null ? `<label class="lowat">Warn at <input type="number" min="0" data-lowat="colour:${c.id}" value="${esc(c.lowAt != null ? c.lowAt : 2)}"></label>` : ''}</div>
+          </div>`).join('')}</div></div>
+      </section>
+      <section class="card sset" style="margin-top:16px">
+        <div class="sset-head"><h2>Other parts</h2><p>Anything else you keep in stock, like screws, screen protectors or batteries. Choose whether one is used automatically per order.</p></div>
+        <div class="sset-body">
+          ${(s.parts || []).length ? `<table class="table parts"><thead><tr><th>Part</th><th>Used automatically</th><th>Stock</th><th>Warn at</th><th></th></tr></thead><tbody>
+            ${s.parts.map((x) => `<tr style="cursor:default" data-part="${x.id}">
+              <td><input type="text" data-pf="name" value="${esc(x.name)}" aria-label="Part name"></td>
+              <td><select data-pf="perOrder" aria-label="Used automatically"><option value="none" ${x.perOrder === 'none' || !x.perOrder ? 'selected' : ''}>No, adjust by hand</option><option value="cs" ${x.perOrder === 'cs' ? 'selected' : ''}>One per ${esc(bizName('cs'))} order</option><option value="hack" ${x.perOrder === 'hack' ? 'selected' : ''}>One per ${esc(bizName('hack'))} order</option></select></td>
+              <td>${stepper('part', x.id, x)}</td>
+              <td>${x.stock != null ? `<input type="number" min="0" class="lowat-in" data-lowat="part:${x.id}" value="${esc(x.lowAt != null ? x.lowAt : 2)}" aria-label="Warn at">` : ''}</td>
+              <td class="r"><button class="iconbtn" data-action="delPart" data-id="${x.id}" aria-label="Remove part">${icon('trash')}</button></td></tr>`).join('')}</tbody></table>` : '<div class="placeholder-note">No other parts yet.</div>'}
+          <div class="addrow"><input type="text" id="newPart" placeholder="New part, for example Screen protector"><button class="btn" data-action="addPart">${icon('plus')}Add part</button></div>
+        </div>
+      </section>`;
+    const find = (key) => { const [kind, id] = key.split(':'); return kind === 'colour' ? s.cs.colours.find((c) => c.id === id) : s.parts.find((p) => p.id === id); };
+    $$('[data-stock]').forEach((el) => el.addEventListener('change', async () => { find(el.dataset.stock).stock = Math.round(num(el.value)); await persist('Stock updated'); renderStock(); }));
+    $$('[data-lowat]').forEach((el) => el.addEventListener('change', async () => { find(el.dataset.lowat).lowAt = Math.max(0, Math.round(num(el.value))); await persist('Warning level saved'); renderStock(); }));
+    $$('[data-part]').forEach((row) => {
+      const part = s.parts.find((p) => p.id === row.dataset.part);
+      $$('[data-pf]', row).forEach((el) => el.addEventListener('change', () => {
+        const v = el.value.trim();
+        if (el.dataset.pf === 'name' && !v) { el.value = part.name; return toast('Part name cannot be empty', true); }
+        part[el.dataset.pf] = v;
+        persist('Saved');
+      }));
+    });
+    const np = $('#newPart');
+    np.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); stockAction('addPart', np); } });
+  }
+
+  async function stockAction(action, el) {
+    const s = S();
+    const item = () => (el.dataset.kind === 'colour' ? s.cs.colours.find((c) => c.id === el.dataset.id) : s.parts.find((p) => p.id === el.dataset.id));
+    const y = content.scrollTop;
+    const redo = async (msg) => { await persist(msg); renderStock(); content.scrollTop = y; };
+    if (action === 'trackStock') { const x = item(); x.stock = 0; if (x.lowAt == null) x.lowAt = 2; return redo(`Tracking ${x.name}. Enter how many you have.`); }
+    if (action === 'stockStep') { const x = item(); x.stock = num(x.stock) + Number(el.dataset.step); return redo(); }
+    if (action === 'addPart') {
+      const name = $('#newPart').value.trim();
+      if (!name) return toast('Enter a part name first', true);
+      s.parts = s.parts || [];
+      s.parts.push({ id: OT.uid(), name, stock: 0, lowAt: 2, perOrder: 'none' });
+      return redo(`Added ${name}`);
+    }
+    if (action === 'delPart') {
+      const x = s.parts.find((p) => p.id === el.dataset.id);
+      if (!(await confirmBox(`Remove ${x.name}?`, 'It will no longer be tracked. Existing orders are not changed.', 'Remove part', true))) return;
+      s.parts = s.parts.filter((p) => p.id !== x.id);
+      return redo('Part removed');
+    }
+  }
+
+  // ---------- Board view ----------
+  function boardHtml(orders) {
+    const cols = OT.STATUSES.map((s) => ({ s, items: orders.filter((o) => o.status === s.id) }));
+    const card = (o) => {
+      const pay = o.payment && o.payment.method === 'finance' ? (() => { const sc = OT.paymentSchedule(o); return `<span class="bc-pay">${sc.filter((x) => x.paid).length}/${sc.length} paid</span>`; })() : '';
+      return `<div class="bcard" draggable="true" data-open="${o.id}" data-drag="${o.id}">
+        <div class="bc-art">${orderArt(o, 'mini')}</div>
+        <div class="bc-main"><div class="bc-top"><b>${esc(o.orderId)}</b><span class="num">${money(o.price)}</span></div>
+          <div class="bc-item">${esc(o.business === 'cs' ? `${o.colourName}, ${o.model}` : o.donor)}</div>
+          <div class="bc-cust">${avatar(o.customerName, custKey(o))}<span>${esc(o.customerName)}</span></div>
+          ${dueBadge(o) || pay ? `<div class="bc-foot">${dueBadge(o)}${pay}</div>` : ''}</div>
+      </div>`;
+    };
+    return `<div class="board">${cols.map((c) => {
+      const items = c.s.id === 'delivered' ? c.items.slice(0, 12) : c.items;
+      return `<div class="bcol" data-drop="${c.s.id}"><div class="bcol-h"><i style="background:${STATUS_COLOR[c.s.id]}"></i>${c.s.label}<span class="count">${c.items.length}</span></div>
+        <div class="bcol-body">${items.map(card).join('') || '<div class="bempty">Drag orders here</div>'}${c.items.length > items.length ? `<div class="bempty">And ${c.items.length - items.length} older</div>` : ''}</div></div>`;
+    }).join('')}</div>`;
+  }
+
+  function wireBoard(root) {
+    let dragId = null;
+    $$('[data-drag]', root).forEach((c) => {
+      c.addEventListener('dragstart', (e) => { dragId = c.dataset.drag; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragId); });
+      c.addEventListener('dragend', () => { c.classList.remove('dragging'); $$('.bcol', root).forEach((x) => x.classList.remove('over')); });
+    });
+    $$('.bcol', root).forEach((col) => {
+      col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('over'); });
+      col.addEventListener('dragleave', (e) => { if (!col.contains(e.relatedTarget)) col.classList.remove('over'); });
+      col.addEventListener('drop', (e) => {
+        e.preventDefault();
+        col.classList.remove('over');
+        const o = DB.orders.find((x) => x.id === (dragId || e.dataTransfer.getData('text/plain')));
+        if (o && o.status !== col.dataset.drop) changeStatus(o, col.dataset.drop);
+      });
+    });
+  }
+
+  // ---------- Turnaround on the order page ----------
+  function turnaroundCard(o) {
+    const item = o.business === 'cs' ? 'controller' : 'calculator';
+    const t = OT.turnaround(S(), o);
+    const head = `<div class="card-head"><h2>${hchip('truck')}Turnaround</h2>${o.receivedAt ? `<button class="btn sm" data-action="markReceived">${icon('edit')}Change date</button>` : ''}</div>`;
+    if (!t) {
+      return `<section class="card">${head}<div class="card-pad turn-wait">
+        <div><b>Waiting for the ${item}</b><span>${o.business === 'cs' ? `Delivery is ${esc(o.delivery === 'express' ? S().cs.expressWording : S().cs.standardWording)}, so the clock starts when it arrives.` : 'The clock starts when the calculator arrives.'}</span></div>
+        <button class="btn dark sm" data-action="markReceived" ${o.status === 'cancelled' ? 'disabled' : ''}>${icon('check')}Mark as received</button></div></section>`;
+    }
+    const start = t.received.getTime();
+    const endRef = Math.max(t.by.getTime(), Date.now(), t.shippedAt || 0) + DAYMS;
+    const pct = (d) => Math.min(Math.max(((d - start) / (endRef - start)) * 100, 0), 100);
+    const states = {
+      on_track: ['ok', `On track, ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'} left`],
+      due_soon: ['warn', t.daysLeft === 0 ? 'Due today' : `Due in ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}`],
+      overdue: ['bad', `Overdue by ${-t.daysLeft} day${t.daysLeft === -1 ? '' : 's'}`],
+      on_time: ['ok', `Shipped on time, in ${t.daysTaken} day${t.daysTaken === 1 ? '' : 's'}`],
+      late: ['bad', `Shipped ${t.daysLate} day${t.daysLate === 1 ? '' : 's'} late`],
+      cancelled: ['', 'Order cancelled']
+    }[t.state];
+    const marker = t.shippedAt || Date.now();
+    return `<section class="card">${head}<div class="card-pad">
+      <div class="turn-state ${states[0]}">${icon(states[0] === 'bad' ? 'alert' : 'clock')}<b>${states[1]}</b></div>
+      <div class="ttrack"><span class="win" style="left:${pct(t.from.getTime())}%;width:${Math.max(pct(t.by.getTime() + DAYMS) - pct(t.from.getTime()), 2)}%"></span>
+        <span class="now ${states[0]}" style="left:${pct(marker)}%"><em>${t.shippedAt ? 'Shipped' : 'Today'}</em></span></div>
+      <div class="tlabels"><span>Received<b>${fmtDate(t.received)}</b></span><span>Ship between<b>${t.from.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} and ${fmtDate(t.by)}</b></span></div>
+    </div></section>`;
+  }
+
+  function markReceived(o) {
+    const item = o.business === 'cs' ? 'controller' : 'calculator';
+    modal(`<div class="m-body"><h2>When did the ${item} arrive?</h2><p>The turnaround window for ${esc(o.orderId)} starts from this date.</p>
+      <div class="field" style="margin-top:16px"><label for="recvDate">Received on</label><input type="date" id="recvDate" class="dateinput" value="${esc(o.receivedAt || todayStr())}" max="${todayStr()}"></div></div>
+      <div class="m-foot">${o.receivedAt ? '<button class="btn ghost danger" id="clearBtn">Clear date</button><span style="flex:1"></span>' : ''}<button class="btn ghost" data-close>Cancel</button><button class="btn dark" id="okBtn">Save</button></div>`, (m, close) => {
+      $('#okBtn', m).onclick = async () => {
+        const v = $('#recvDate', m).value;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return toast('Choose a date', true);
+        o.receivedAt = v;
+        o.history.push({ status: o.status, at: Date.now(), email: 'none', note: `${item.charAt(0).toUpperCase() + item.slice(1)} received ${fmtDate(new Date(v + 'T12:00:00'))}` });
+        close();
+        await persist('Received date saved');
+        renderOrder();
+      };
+      const clr = $('#clearBtn', m);
+      if (clr) clr.onclick = async () => { delete o.receivedAt; close(); await persist('Received date cleared'); renderOrder(); };
+    }, o.business);
+  }
+
+  // ---------- Invoices ----------
+  async function saveInvoice(o) {
+    const ok = await api.saveInvoice(OT.invoiceHtml(S(), o), `${OT.invoiceNumber(o)}.pdf`);
+    if (ok) toast('Invoice saved and opened');
+  }
+
+  async function emailInvoice(o) {
+    if (!o.customerEmail) return toast('This customer has no email address. Add one with Edit.', true);
+    if (!emailReady()) return toast('Set up email in Settings to send invoices directly, or download the invoice and attach it yourself.', true);
+    if (!(await confirmBox(`Email invoice to ${o.customerName}?`, `${esc(OT.invoiceNumber(o))} for ${money(o.price)} will be sent to ${esc(o.customerEmail)} as a PDF.`, 'Send invoice'))) return;
+    const biz = bizName(o.business);
+    const first = String(o.customerName || '').trim().split(/\s+/)[0] || 'there';
+    const sign = S().email.signOff || '';
+    const text = `Hi ${first},\n\nPlease find attached invoice ${OT.invoiceNumber(o)} for your ${biz} order ${o.orderId}.\n\nTotal: ${money(o.price)}\nPayment: ${OT.paymentText(o)}\n\n${sign}`;
+    toast('Preparing invoice...');
+    const base64 = await api.invoicePdf(OT.invoiceHtml(S(), o));
+    const res = await api.sendEmail(S().email, {
+      to: o.customerEmail, subject: `${biz} invoice ${OT.invoiceNumber(o)}`, text, html: `<div style="font-family:-apple-system,Helvetica,Arial,sans-serif;line-height:1.5">${esc(text).replace(/\n/g, '<br>')}</div>`,
+      attachments: [{ filename: `${OT.invoiceNumber(o)}.pdf`, base64, contentType: 'application/pdf' }]
+    });
+    if (!res.ok) return toast('Email failed: ' + res.error, true);
+    o.history.push({ status: o.status, at: Date.now(), email: 'none', note: `Invoice emailed to ${o.customerEmail}` });
+    await persist(`Invoice sent to ${o.customerEmail}`);
+    renderOrder();
+  }
+
+
   // ---------- Global events ----------
   async function handleAction(action, el) {
     const order = route.page === 'order' ? DB.orders.find((x) => x.id === route.id) : null;
@@ -1470,6 +2174,11 @@
       case 'cancelOrder': return order && cancelOrder(order);
       case 'editPayment': return order && editPayment(order);
       case 'editOrder': return order && go('edit', { id: order.id, biz: order.business });
+      case 'markReceived': return order && markReceived(order);
+      case 'invoiceSave': return order && saveInvoice(order);
+      case 'invoiceEmail': return order && emailInvoice(order);
+      case 'showPending': listState[el.dataset.biz].tab = 'pending'; listState[el.dataset.biz].view = 'list'; return go(el.dataset.biz);
+      case 'trackStock': case 'stockStep': case 'addPart': case 'delPart': return stockAction(action, el);
       case 'editNotes': return order && editNotes(order);
       case 'toggleUpfront':
         if (order) {
@@ -1484,6 +2193,7 @@
         return;
       case 'deleteOrder':
         if (order && await confirmBox(`Delete ${order.orderId}?`, `The order for ${esc(order.customerName)} will be removed completely, including its history. This cannot be undone. To keep a record instead, cancel the order.`, 'Delete permanently', true)) {
+          if (!['shipped', 'delivered'].includes(order.status)) OT.returnStock(S(), order);
           DB.orders = DB.orders.filter((x) => x.id !== order.id);
           await persist('Order deleted');
           go(order.business);

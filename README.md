@@ -28,6 +28,12 @@ The version number is shown at the bottom of the sidebar, so you can check you a
 - Discounts: saved one-click discounts (set in Settings) or a custom percent or amount per order, changeable later from the order page. Shown in the order summary and in customer emails.
 - Payment: pay upfront (with a paid toggle) or finance, choosing weekly or monthly, the number of payments and the first payment date. The order page shows the instalment schedule with paid ticks and overdue payments highlighted.
 - Edit any order after creating it (Edit order button, or Cmd+E on an order page). The original price is kept unless the product itself changes; status, history and paid payments are kept, and the history records what was edited.
+- Home dashboard: revenue this month with trend, open orders, due this week, money still to collect, a Needs attention list (overdue orders, overdue payments, low stock, orders to confirm), both businesses side by side, a revenue chart, recent activity, top customers and stock.
+- Board view for orders, with drag and drop between status columns.
+- Invoices: download a PDF or email it to the customer as an attachment. Your address, payment instructions and footer are set in Settings, Invoices.
+- Turnaround tracking: mark when the controller or calculator arrives (or tick it when changing status) and each order gets a ship-by date, with due soon and overdue warnings. Windows are set in Settings, Turnaround.
+- Reports: revenue by month, average order, discounts, money to collect, on-time rate, top colours, models, donor calculators, extra games, payments, turnaround and top customers, filtered by period and business.
+- Stock: counts per ClearSense colour and for any extra parts, taken automatically when orders are created and returned when cancelled, with low stock warnings.
 - Extra notes on each order, private to you and never sent to customers.
 - Cancel an order (kept on record, left out of open orders and totals, can be reopened) or delete it permanently.
 - Passcode lock on launch.
