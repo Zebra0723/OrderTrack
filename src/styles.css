@@ -996,3 +996,18 @@ em.pay { background: var(--blue); }
 .comet-status { font-size: 12.5px; font-weight: 600; padding: 3px 10px; border-radius: 99px; background: var(--sunken); color: var(--ink-3); }
 .comet-status.on { background: var(--green-50); color: var(--green); }
 .comet-status.bad { background: var(--coral-50); color: var(--coral-ink); }
+
+/* ---------- Contact via Comet ---------- */
+.outreach { margin-bottom: 16px; }
+.olist { list-style: none; margin: 0; padding: 0; }
+.olist li { display: flex; align-items: center; gap: 12px; padding: 10px 2px; }
+.olist li + li { border-top: 1px solid var(--line); }
+.o-main { flex: 1; min-width: 0; }
+.o-main b { display: block; font-size: 13.5px; font-weight: 620; }
+.o-main span { display: block; font-size: 12.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.o-main .o-err { color: var(--coral-ink); white-space: normal; }
+.o-side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.o-when { font-size: 11.5px; color: var(--ink-3); }
+.o-act { display: flex; align-items: center; gap: 6px; }
+.cust-actions { display: flex; justify-content: flex-end; padding: 10px 16px 8px; }
+@media (max-width: 760px) { .olist li { flex-wrap: wrap; } .o-side { align-items: flex-start; } }

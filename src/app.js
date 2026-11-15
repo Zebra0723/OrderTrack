@@ -1212,7 +1212,9 @@
     const total = all.reduce((s, c) => s + c.total, 0);
     main.innerHTML = `
       <div class="pagehead"><div><div class="crumb"><span class="bar"></span>Both businesses</div><h1>Customers</h1>
-        <p class="lede">${all.length} customer${all.length === 1 ? '' : 's'}, ${money(total)} in orders.</p></div></div>
+        <p class="lede">${all.length} customer${all.length === 1 ? '' : 's'}, ${money(total)} in orders.</p></div>
+        <div class="head-actions"><button class="btn primary lg" data-action="cometInvite">${icon('send')}Contact via Comet</button></div></div>
+      ${outreachCard()}
       <div class="card" style="overflow:hidden">
         <div class="toolbar" style="padding:10px 16px"><div class="filterbox" style="padding:0;flex:1">${icon('search')}<input type="text" id="custSearch" placeholder="Search by name, email or phone" value="${esc(customerQuery)}" style="width:100%;max-width:360px"></div></div>
         <div id="custList" class="custlist"></div>
@@ -1231,7 +1233,8 @@
             <div class="tot"><b>${money(c.total)}</b><span class="sub">${c.orders.length} order${c.orders.length === 1 ? '' : 's'}${open ? `, ${open} open` : ''}</span></div>
             <span class="chev">${icon('chev')}</span>
           </summary>
-          <div class="body">${orderTable(c.orders, true)}</div>
+          <div class="body">${orderTable(c.orders, true)}
+            <div class="cust-actions"><button class="btn sm" data-action="cometInvite" data-contact="${esc(c.phone || c.email || '')}" data-name="${esc(c.name)}" data-biz="${esc(c.orders[0] ? c.orders[0].business : 'cs')}">${icon('send')}Message via Comet</button></div></div>
         </details>`;
       }).join('') : `<div class="empty"><div class="art">${icon('users')}</div><h3>${all.length ? 'No matching customers' : 'No customers yet'}</h3><p>${all.length ? 'Try a different name or email.' : 'Customers appear here once you create orders.'}</p></div>`;
       $$('.cust').forEach((d) => d.addEventListener('toggle', () => { if (d.open) openCustomer = d.dataset.key; }));
@@ -1869,7 +1872,7 @@
       <div class="pagehead home-head">
         <div><div class="crumb"><span class="bar"></span>${now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
           <h1>${greet}. <em>${att.length ? `${att.length} thing${att.length === 1 ? '' : 's'} need${att.length === 1 ? 's' : ''} you.` : 'All caught up.'}</em></h1></div>
-        <div class="head-actions"><button class="btn lg" data-action="new" data-biz="hack" style="--accent:var(--amber)">${icon('plus')}${esc(bizName('hack'))}</button><button class="btn primary lg" data-action="new" data-biz="cs">${icon('plus')}${esc(bizName('cs'))} order</button></div>
+        <div class="head-actions"><button class="btn lg ghost" data-action="cometInvite" title="Comet texts a new customer and takes their order">${icon('send')}Contact via Comet</button><button class="btn lg" data-action="new" data-biz="hack" style="--accent:var(--amber)">${icon('plus')}${esc(bizName('hack'))}</button><button class="btn primary lg" data-action="new" data-biz="cs">${icon('plus')}${esc(bizName('cs'))} order</button></div>
       </div>
 
       <div class="tiles4">
@@ -2485,6 +2488,7 @@
     OT.takeStock(S(), o);
     o.costs = OT.costBreakdown(S(), o);
     DB.orders.push(o);
+    markOutreachOrdered(o);
     if (!(await persist())) return { ok: false, error: 'OrderTrack could not save the order' };
     // Do not redraw over a form the owner is typing in.
     if (!['new', 'edit', 'settings'].includes(route.page) && !$('#shell').hidden) render();
@@ -2515,6 +2519,123 @@
   }
 
 
+  // ======================================================================
+  // Contact via Comet: the owner adds someone, Comet texts them first
+  // ======================================================================
+  const contactKey = (contact) => { const c = String(contact || '').trim(); return isEmail(c) ? c.toLowerCase() : OT.phoneDigits(c); };
+  const cometReady = () => !!(S().comet && S().comet.enabled && S().comet.token);
+  const OUTREACH_STATUS = {
+    queued: ['s-pending', 'Waiting for Comet'],
+    sent: ['s-confirmed', 'Messaged'],
+    failed: ['s-shipped', 'Could not reach'],
+    ordered: ['s-delivered', 'Ordered']
+  };
+
+  async function openCometInvite(prefill) {
+    prefill = prefill || {};
+    if (!cometReady()) {
+      if (await confirmBox('Turn on Comet first', 'Comet needs to be switched on in Settings, Comet (iMessage), before it can contact customers.', 'Open Settings')) go('settings');
+      return;
+    }
+    const biz = prefill.business === 'hack' ? 'hack' : 'cs';
+    const tile = (value, title, sub) => `<label class="tile"><input type="radio" name="ibiz" value="${value}" ${biz === value ? 'checked' : ''}><span class="radio"></span><span class="t-main"><span class="t-title">${esc(title)}</span><span class="t-sub">${esc(sub)}</span></span></label>`;
+    modal(`<div class="m-body"><h2>Contact a customer via Comet</h2>
+      <p>Comet texts them from its own iMessage number, says what they are interested in and starts the order. Their replies go to Comet, and the order appears here once they confirm it.</p>
+      <div class="stack" style="margin-top:16px">
+        <div class="grid">
+          <div class="field" data-field="i_contact"><label for="i_contact">iMessage email or phone</label><input type="text" id="i_contact" value="${esc(prefill.contact || '')}" placeholder="name@icloud.com or 07700 900123" autocomplete="off"><div class="err" hidden></div></div>
+          <div class="field" data-field="i_name"><label for="i_name">Name (optional)</label><input type="text" id="i_name" value="${esc(prefill.name || '')}" placeholder="So Comet can greet them"><div class="err" hidden></div></div>
+        </div>
+        <div class="field"><span class="flabel">Product</span><div class="tiles paymethod">${tile('cs', bizName('cs'), 'Custom PS5 controller housing')}${tile('hack', bizName('hack'), 'Calculator that plays games')}</div></div>
+        <div class="field" data-field="i_product"><label for="i_product">What they want (optional)</label><input type="text" id="i_product" value="${esc(prefill.product || '')}" placeholder="For example Scarlet, express, keep original buttons"><div class="hint">Comet mentions this and still checks the details with them.</div></div>
+        <div class="field"><label for="i_note">Note for Comet (optional)</label><textarea id="i_note" style="min-height:70px" placeholder="For example: met at the market, asked for a quote">${esc(prefill.note || '')}</textarea><div class="hint">Comet uses this to word its first message. The customer does not see it.</div></div>
+      </div></div>
+      <div class="m-foot"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" id="okBtn">${icon('send')}Send via Comet</button></div>`, (m, close) => {
+      $('#i_contact', m).addEventListener('input', () => setErr('i_contact', ''));
+      $('#okBtn', m).onclick = async () => {
+        const contact = $('#i_contact', m).value.trim();
+        const name = $('#i_name', m).value.trim().slice(0, 120);
+        const valid = isEmail(contact) || (contact && !OT.validatePhone(contact));
+        setErr('i_contact', !contact ? 'Enter their iMessage email or phone number.' : valid ? '' : 'That is not a valid email or phone number.');
+        if (!valid) return;
+        const key = contactKey(contact);
+        if ((DB.outreach || []).some((x) => x.status === 'queued' && contactKey(x.contact) === key)) {
+          setErr('i_contact', 'Comet is already about to message this person.');
+          return;
+        }
+        const req = {
+          id: OT.uid(), name, contact, business: ($('input[name=ibiz]:checked', m) || {}).value === 'hack' ? 'hack' : 'cs',
+          product: $('#i_product', m).value.trim().slice(0, 300), note: $('#i_note', m).value.trim().slice(0, 600),
+          status: 'queued', createdAt: Date.now()
+        };
+        DB.outreach = DB.outreach || [];
+        DB.outreach.push(req);
+        close();
+        await persist(`Comet will message ${name || contact} within a minute`);
+        if (['customers', 'home'].includes(route.page)) render();
+      };
+    });
+  }
+
+  function outreachCard() {
+    const list = [...(DB.outreach || [])].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8);
+    if (!list.length) return '';
+    return `<section class="card outreach">
+      <div class="card-head"><h2>${hchip('send')}Contacted via Comet</h2><span class="meta">${(DB.outreach || []).length} total</span></div>
+      <div class="card-pad"><ul class="olist">${list.map((x) => {
+        const [cls, label] = OUTREACH_STATUS[x.status] || OUTREACH_STATUS.queued;
+        const when = x.status === 'sent' && x.sentAt ? `messaged ${ago(x.sentAt).toLowerCase()}` : x.status === 'ordered' && x.orderId ? `order ${x.orderId}` : `added ${ago(x.createdAt).toLowerCase()}`;
+        return `<li>${avatar(x.name || x.contact, contactKey(x.contact))}
+          <div class="o-main"><b>${esc(x.name || x.contact)}</b><span>${esc([x.name ? x.contact : '', bizName(x.business), x.product].filter(Boolean).join(', '))}</span>
+            ${x.status === 'failed' && x.error ? `<span class="o-err">${esc(x.error)}</span>` : ''}</div>
+          <div class="o-side"><span class="pill ${cls}">${label}</span><span class="o-when">${esc(when)}</span></div>
+          <div class="o-act">${x.status === 'failed' ? `<button class="btn sm" data-action="outreachRetry" data-id="${x.id}">Try again</button>` : ''}${x.status === 'ordered' && x.orderId ? `<button class="btn sm" data-action="outreachOpen" data-id="${x.id}">Open order</button>` : ''}
+            ${['queued', 'failed'].includes(x.status) ? `<button class="iconbtn" data-action="outreachRemove" data-id="${x.id}" title="Remove" aria-label="Remove">${icon('x')}</button>` : ''}</div></li>`;
+      }).join('')}</ul></div></section>`;
+  }
+
+  async function outreachAction(action, el) {
+    const x = (DB.outreach || []).find((r) => r.id === el.dataset.id);
+    if (!x) return;
+    if (action === 'outreachRemove') {
+      DB.outreach = DB.outreach.filter((r) => r !== x);
+      await persist(x.status === 'queued' ? 'Cancelled before Comet sent anything' : 'Removed');
+    } else if (action === 'outreachRetry') {
+      x.status = 'queued'; delete x.error;
+      await persist(`Comet will try ${x.name || x.contact} again`);
+    } else if (action === 'outreachOpen') {
+      const o = DB.orders.find((r) => r.orderId === x.orderId);
+      if (o) return go('order', { id: o.id, biz: o.business });
+    }
+    render();
+  }
+
+  // Comet reports back after texting someone.
+  if (api.onApiOutreachUpdate) {
+    api.onApiOutreachUpdate(async ({ reqId, payload }) => {
+      const x = (DB.outreach || []).find((r) => r.id === payload.id);
+      if (!x) return api.apiRespond(reqId, { ok: false, error: 'No such request' });
+      if (x.status === 'queued') {
+        x.status = payload.status;
+        if (payload.status === 'sent') { x.sentAt = Date.now(); delete x.error; } else x.error = payload.error || 'Comet could not send the message';
+        await persist();
+        if (payload.status === 'failed') toast(`Comet could not reach ${x.name || x.contact}: ${x.error}`, true);
+        else toast(`Comet messaged ${x.name || x.contact}`);
+        if (['customers', 'home'].includes(route.page) && !$('#shell').hidden) render();
+      }
+      api.apiRespond(reqId, { ok: true });
+    });
+  }
+
+  // An order from someone Comet contacted marks their request as ordered.
+  function markOutreachOrdered(o) {
+    const keys = [contactKey(o.customerEmail), contactKey(o.customerPhone)].filter(Boolean);
+    for (const x of DB.outreach || []) {
+      if (['sent', 'queued'].includes(x.status) && keys.includes(contactKey(x.contact))) { x.status = 'ordered'; x.orderId = o.orderId; }
+    }
+  }
+
+
   // ---------- Global events ----------
   async function handleAction(action, el) {
     const order = route.page === 'order' ? DB.orders.find((x) => x.id === route.id) : null;
@@ -2536,6 +2657,8 @@
       case 'cancelOrder': return order && cancelOrder(order);
       case 'editPayment': return order && editPayment(order);
       case 'editOrder': return order && go('edit', { id: order.id, biz: order.business });
+      case 'cometInvite': return openCometInvite({ contact: el.dataset.contact, name: el.dataset.name, business: el.dataset.biz });
+      case 'outreachRemove': case 'outreachRetry': case 'outreachOpen': return outreachAction(action, el);
       case 'markReceived': return order && markReceived(order);
       case 'editCost': return order && editCost(order);
       case 'quickReceive': {

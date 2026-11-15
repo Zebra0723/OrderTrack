@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   invoicePdf: (html) => ipcRenderer.invoke('invoice:pdf', html),
   saveInvoice: (html, filename) => ipcRenderer.invoke('invoice:save', { html, filename }),
   onApiCreateOrder: (fn) => ipcRenderer.on('api:createOrder', (_e, msg) => fn(msg)),
+  onApiOutreachUpdate: (fn) => ipcRenderer.on('api:outreachUpdate', (_e, msg) => fn(msg)),
   apiRespond: (reqId, result) => ipcRenderer.invoke('api:respond', { reqId, result }),
   cometStatus: () => ipcRenderer.invoke('comet:status')
 });

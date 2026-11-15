@@ -82,6 +82,22 @@ class CometApi {
       const result = await this.createOrder(body.value);
       return this.send(res, result.ok ? 201 : 422, result);
     }
+    // People the owner asked Comet to contact, waiting for Comet to text them.
+    if (url.pathname === '/api/outreach' && req.method === 'GET') {
+      const queued = (this.data.outreach || []).filter((x) => x.status === 'queued');
+      return this.send(res, 200, { ok: true, requests: queued.map((x) => ({
+        id: x.id, name: x.name || '', contact: x.contact, business: x.business, product: x.product || '', note: x.note || '', createdAt: x.createdAt
+      })) });
+    }
+    const m = url.pathname.match(/^\/api\/outreach\/([A-Za-z0-9_-]{1,40})$/);
+    if (m && req.method === 'POST') {
+      const body = await readJson(req);
+      if (!body.ok) return this.send(res, 400, { ok: false, error: body.error });
+      const status = body.value.status;
+      if (!['sent', 'failed'].includes(status)) return this.send(res, 400, { ok: false, error: 'status must be sent or failed' });
+      const result = await this.askWindow('api:outreachUpdate', { id: m[1], status, error: String(body.value.error || '').slice(0, 300) });
+      return this.send(res, result.ok ? 200 : 404, result);
+    }
     return this.send(res, 404, { ok: false, error: 'Not found' });
   }
 
@@ -114,15 +130,20 @@ class CometApi {
   }
 
   /** Hands the order to the app window, which validates and saves it. */
-  async createOrder(payload) {
+  createOrder(payload) {
+    return this.askWindow('api:createOrder', payload);
+  }
+
+  /** Sends a request to the app window (which owns the data) and waits for its answer. */
+  askWindow(channel, payload) {
     const win = this.getWindow();
-    if (!win) return { ok: false, error: 'The OrderTrack window is not open' };
+    if (!win) return Promise.resolve({ ok: false, error: 'The OrderTrack window is not open' });
     const reqId = crypto.randomUUID();
     const result = new Promise((resolve) => {
       const timer = setTimeout(() => { this.pending.delete(reqId); resolve({ ok: false, error: 'OrderTrack did not respond in time' }); }, 15000);
       this.pending.set(reqId, (r) => { clearTimeout(timer); this.pending.delete(reqId); resolve(r); });
     });
-    win.webContents.send('api:createOrder', { reqId, payload });
+    win.webContents.send(channel, { reqId, payload });
     return result;
   }
 

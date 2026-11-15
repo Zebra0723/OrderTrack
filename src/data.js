@@ -91,7 +91,7 @@
   }
 
   function emptyDB() {
-    return { version: 1, settings: defaultSettings(), orders: [], security: null };
+    return { version: 1, settings: defaultSettings(), orders: [], outreach: [], security: null };
   }
 
   // Fill in anything missing from older saved data so new settings never break.
@@ -114,6 +114,8 @@
       version: 1,
       security: db.security || null,
       orders: Array.isArray(db.orders) ? db.orders : [],
+      // People the owner asked Comet to contact over iMessage.
+      outreach: Array.isArray(db.outreach) ? db.outreach : [],
       settings: {
         businessNames: { ...d.settings.businessNames, ...(s.businessNames || {}) },
         cs: { ...d.settings.cs, ...(s.cs || {}) },
