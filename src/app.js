@@ -1248,7 +1248,7 @@
 
   const SETTINGS_SECTIONS = [
     ['set-colours', 'Colours'], ['set-models', 'BDM models'], ['set-options', 'Options'], ['set-discounts', 'Discounts'], ['set-delivery', 'Delivery wording'],
-    ['set-hack', 'Hackulator'], ['set-costs', 'Costs'], ['set-invoice', 'Invoices'], ['set-turn', 'Turnaround'], ['set-email', 'Email'], ['set-general', 'Business names'], ['set-pass', 'Passcode'], ['set-data', 'Data and backup']
+    ['set-hack', 'Hackulator'], ['set-comet', 'Comet (iMessage)'], ['set-costs', 'Costs'], ['set-invoice', 'Invoices'], ['set-turn', 'Turnaround'], ['set-email', 'Email'], ['set-general', 'Business names'], ['set-pass', 'Passcode'], ['set-data', 'Data and backup']
   ];
 
   async function renderSettings() {
@@ -1269,6 +1269,7 @@
               <div class="colour-pick" title="Change swatch">${swatch(c.swatch, true)}<input type="color" data-cf="swatch" value="${esc(c.swatch)}" aria-label="Swatch colour"></div>
               <div>
                 <div class="colour-line"><input type="text" data-cf="name" value="${esc(c.name)}" aria-label="Colour name"><button class="iconbtn" data-action="delColour" title="Remove colour" aria-label="Remove colour">${icon('trash')}</button></div>
+                <input type="url" class="xr-link" data-cf="extremerateUrl" value="${esc(c.extremerateUrl || '')}" placeholder="eXtremeRate product link for Comet photos (optional, found automatically if empty)" aria-label="eXtremeRate product link">
                 <div class="deliv">
                   <div class="deliv-opt ${c.standard.available ? '' : 'off'}">${sw('data-cf="standard.available"', c.standard.available, 'Non express')}${priceInput('data-cf="standard.price" aria-label="Non express price"', c.standard.price)}</div>
                   <div class="deliv-opt ${c.express.available ? '' : 'off'}">${sw('data-cf="express.available"', c.express.available, 'Express')}${priceInput('data-cf="express.price" aria-label="Express price"', c.express.price)}</div>
@@ -1302,6 +1303,15 @@
             <div class="field"><label>Base price</label>${priceInput('data-set="hack.basePrice" data-num', s.hack.basePrice)}</div>
             <div class="field"><label>Extra game price</label>${priceInput('data-set="hack.extraGamePrice" data-num', s.hack.extraGamePrice)}</div>
             <div class="field full"><label>Included games, one per line</label><textarea data-set="hack.includedGames" data-lines>${esc(s.hack.includedGames.join('\n'))}</textarea></div></div>`)}
+
+          ${sset('set-comet', 'Comet (iMessage orders)', 'Lets Comet, your iMessage assistant on this Mac, read your colours, prices and stock and create orders from customer chats. Only programs on this Mac with the key below can use it. Orders from Comet start as Pending, marked "Ordered over iMessage with Comet".', `
+            <div class="comet-row">${sw('data-comet="enabled"', s.comet.enabled, 'Let Comet create orders')}<span class="comet-status" id="cometStatus">Checking...</span></div>
+            <div class="grid" style="margin-top:14px">
+              <div class="field"><label>Key</label><div style="display:flex;gap:8px"><input type="text" readonly class="mono" id="cometToken" value="${esc(s.comet.token || '')}" placeholder="Turn Comet on to create a key"><button class="btn" data-action="copyCometToken">Copy</button></div>
+                <div class="hint">Put this in Comet's .env as ORDERTRACK_TOKEN. <button class="linkbtn" data-action="newCometToken">Make a new key</button></div></div>
+              <div class="field"><label>Port</label><input type="number" min="1024" max="65535" data-set="comet.port" data-num value="${esc(s.comet.port)}"><div class="hint">Comet's .env: ORDERTRACK_URL=http://127.0.0.1:${esc(s.comet.port)}</div></div>
+            </div>
+            <div class="callout" style="margin-top:14px">${icon('info')}<div>OrderTrack must be open for Comet to create orders. Closing the window keeps it running; quitting with Cmd+Q stops it, and Comet will hold new orders until it is back.</div></div>`)}
 
           ${sset('set-costs', 'Costs and profit', 'What each order costs you, used to show profit on orders, Home and Reports. Shell and part costs are set on the Stock page. Each order keeps the costs from when it was created, and you can change any order by hand.', `<div class="grid">
             <div class="field"><label>Postage per order</label><div class="prefix"><input type="number" step="0.01" min="0" data-set="costs.postage" data-num value="${esc(s.costs.postage)}"></div></div>
@@ -1349,6 +1359,24 @@
             <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-action="export">${icon('download')}Export backup</button><button class="btn" data-action="import">${icon('upload')}Import backup</button></div>`)}
         </div>
       </div>`;
+
+    const cometToggle = $('[data-comet="enabled"]', main);
+    if (cometToggle) {
+      cometToggle.addEventListener('change', async () => {
+        s.comet.enabled = cometToggle.checked;
+        if (s.comet.enabled && !s.comet.token) s.comet.token = newToken();
+        await persist(s.comet.enabled ? 'Comet can now create orders' : 'Comet turned off');
+        const y = content.scrollTop; await renderSettings(); content.scrollTop = y;
+      });
+      const st = $('#cometStatus', main);
+      const showStatus = async () => {
+        if (!api.cometStatus) { st.textContent = 'Only available in the Mac app'; return; }
+        const r = await api.cometStatus();
+        st.className = 'comet-status ' + (r.listening ? 'on' : s.comet.enabled ? 'bad' : '');
+        st.textContent = r.listening ? `Running on port ${r.port}` : s.comet.enabled ? 'Not running. Is the port in use?' : 'Off';
+      };
+      setTimeout(showStatus, 300);
+    }
 
     // Sub-navigation with active section tracking.
     $$('[data-jump]', main).forEach((b) => b.onclick = () => document.getElementById(b.dataset.jump).scrollIntoView({ behavior: 'smooth', block: 'start' }));
@@ -1490,6 +1518,17 @@
         const res = await api.sendEmail(s.email, { to, subject: 'OrderTrack test email', text: 'Email sending from OrderTrack is working.', html: '<p>Email sending from OrderTrack is working.</p>' });
         el.disabled = false;
         return res.ok ? toast(`Test email sent to ${to}`) : toast('Email failed: ' + res.error, true);
+      }
+      case 'copyCometToken': {
+        const t = $('#cometToken');
+        if (!t.value) return toast('Turn Comet on first to create a key', true);
+        try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); }
+        return toast('Key copied');
+      }
+      case 'newCometToken': {
+        if (!(await confirmBox('Make a new key?', 'The old key stops working straight away. Update ORDERTRACK_TOKEN in Comet\'s .env and restart Comet.', 'Make new key', true))) return;
+        s.comet.token = newToken();
+        return reRender('New key created');
       }
       case 'changePass': {
         const old = $('#pcOld').value, n1 = $('#pcNew').value, n2 = $('#pcNew2').value;
@@ -2358,6 +2397,121 @@
     if (!OT.costsConfigured(S())) return '';
     const p = orders.reduce((t, o) => t + OT.profitOf(S(), o), 0);
     return `<div class="t4-sub">${money(p)} profit</div>`;
+  }
+
+
+  // ======================================================================
+  // Orders created by Comet (the iMessage assistant) through the local API
+  // ======================================================================
+  const lc = (v) => String(v || '').trim().toLowerCase();
+
+  // Validates a request from Comet and turns it into a normal order. Never trusts prices
+  // from the request: everything is priced from Settings here.
+  function buildApiOrder(p) {
+    const s = S();
+    const err = (m) => ({ ok: false, error: m });
+    if (!p || typeof p !== 'object') return err('Missing order details');
+    const business = p.business === 'hack' ? 'hack' : p.business === 'cs' ? 'cs' : null;
+    if (!business) return err('business must be "cs" or "hack"');
+    const name = String(p.customerName || '').trim().slice(0, 120);
+    const email = String(p.customerEmail || '').trim().slice(0, 200);
+    const phone = String(p.customerPhone || '').trim().slice(0, 40);
+    if (!name) return err('customerName is required');
+    if (!email && !phone) return err('customerEmail or customerPhone is required');
+    if (email && !isEmail(email)) return err('customerEmail is not a valid email address');
+    const pErr = OT.validatePhone(phone);
+    if (pErr) return err(pErr);
+
+    const base = {
+      business, customerName: name, customerEmail: email, customerPhone: phone,
+      orderId: OT.nextOrderId(DB.orders, business), serial: OT.nextSerial(DB.orders, business),
+      notes: String(p.notes || '').trim().slice(0, 1000)
+    };
+
+    let order;
+    if (business === 'cs') {
+      const model = s.cs.models.find((m) => lc(m) === lc(p.model) || lc(m).replace('-', '') === lc(p.model).replace(/[\s-]/g, ''));
+      if (!model) return err(`Unknown model "${p.model}". Models: ${s.cs.models.join(', ')}`);
+      const colours = OT.coloursFor(s, model);
+      const c = colours.find((x) => x.id === p.colourId) || colours.find((x) => lc(x.name) === lc(p.colourName));
+      if (!c) return err(`Colour not available for ${model}. Available: ${colours.map((x) => x.name).join(', ')}`);
+      const delivery = p.delivery === 'express' ? 'express' : p.delivery === 'standard' || lc(p.delivery) === 'non express' ? 'standard' : null;
+      const opt = OT.deliveryOptions(c).find((d) => d.id === delivery);
+      if (!opt) return err(`${c.name} is available as: ${OT.deliveryOptions(c).map((d) => d.label).join(' or ')}`);
+      const wanted = Array.isArray(p.options) ? p.options : [];
+      const addons = [];
+      for (const w of wanted) {
+        const a = s.cs.addons.find((x) => x.id === w || lc(x.name) === lc(w));
+        if (!a) return err(`Unknown option "${w}". Options: ${s.cs.addons.map((x) => x.name).join(', ')}`);
+        if (!addons.includes(a)) addons.push(a);
+      }
+      const serialPhoto = String(p.controllerSerial || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 30);
+      order = {
+        ...base, model, colourId: c.id, colourName: c.name, swatch: c.swatch, delivery,
+        addonIds: addons.map((a) => a.id), addonNames: addons.map((a) => a.name),
+        price: OT.csPrice(s, c.id, delivery, addons.map((a) => a.id)), controllerSerial: serialPhoto
+      };
+    } else {
+      const donor = String(p.donor || '').trim().slice(0, 120);
+      if (!donor) return err('donor (the calculator model) is required');
+      const extraGames = (Array.isArray(p.extraGames) ? p.extraGames : []).map((g) => String(g).trim().slice(0, 60)).filter(Boolean).slice(0, 30);
+      order = { ...base, donor, includedGames: [...s.hack.includedGames], extraGames, price: OT.hackPrice(s, extraGames) };
+    }
+
+    const pay = p.payment || {};
+    if (pay.method === 'finance') {
+      const count = Math.round(num(pay.count));
+      const frequency = pay.frequency === 'weekly' ? 'weekly' : 'monthly';
+      if (count < 2 || count > 52) return err('Finance needs between 2 and 52 payments');
+      const start = /^\d{4}-\d{2}-\d{2}$/.test(pay.start || '') && pay.start >= todayStr() ? pay.start : todayStr();
+      order.payment = { method: 'finance', frequency, count, start, paid: [] };
+    } else {
+      order.payment = { method: 'upfront', paid: false };
+    }
+    OT.applyDiscount(order, null);
+    return { ok: true, order };
+  }
+
+  async function apiCreateOrder(p) {
+    const built = buildApiOrder(p);
+    if (!built.ok) return built;
+    const o = built.order;
+    const now = Date.now();
+    o.id = OT.uid();
+    o.status = 'pending';
+    o.createdAt = now;
+    o.source = 'comet';
+    o.history = [{ status: 'pending', at: now, email: 'none' }, { status: 'pending', at: now + 1, email: 'none', note: 'Ordered over iMessage with Comet' }];
+    OT.takeStock(S(), o);
+    o.costs = OT.costBreakdown(S(), o);
+    DB.orders.push(o);
+    if (!(await persist())) return { ok: false, error: 'OrderTrack could not save the order' };
+    // Do not redraw over a form the owner is typing in.
+    if (!['new', 'edit', 'settings'].includes(route.page) && !$('#shell').hidden) render();
+    else updateCounts();
+    toast(`New order ${o.orderId} from ${o.customerName}, via Comet`);
+    return {
+      ok: true,
+      order: {
+        orderId: o.orderId, serial: o.serial, business: o.business, price: o.price, priceText: money(o.price),
+        summary: OT.orderLines(S(), o).map(([k, v]) => `${k}: ${v}`).join('\n'),
+        payment: OT.paymentText(o)
+      }
+    };
+  }
+
+  if (api.onApiCreateOrder) {
+    api.onApiCreateOrder(async ({ reqId, payload }) => {
+      let result;
+      try { result = await apiCreateOrder(payload); } catch (e) { result = { ok: false, error: e.message }; }
+      api.apiRespond(reqId, result);
+    });
+  }
+
+  function newToken() {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
   }
 
 

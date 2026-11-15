@@ -84,6 +84,8 @@
       // Costs per order, used for profit. Shell and part costs live on the colours and parts.
       costs: { postage: 0, csExtra: 0, hackExtra: 0, hackDonor: 0 },
       goals: { monthly: 0 },
+      // Comet, the iMessage assistant, creates orders through a local API.
+      comet: { enabled: false, token: '', port: 8790 },
       autoLockMinutes: 10
     };
   }
@@ -123,6 +125,7 @@
         parts: Array.isArray(s.parts) ? s.parts : [],
         costs: { ...d.settings.costs, ...(s.costs || {}) },
         goals: { ...d.settings.goals, ...(s.goals || {}) },
+        comet: { ...d.settings.comet, ...(s.comet || {}) },
         autoLockMinutes: s.autoLockMinutes != null ? s.autoLockMinutes : d.settings.autoLockMinutes
       }
     };
@@ -237,6 +240,17 @@
     return null;
   }
 
+  // Next internal serial: the prefix plus 8 digits, one above the highest in use.
+  function nextSerial(orders, business) {
+    const prefix = business === 'cs' ? 'CS' : 'HC';
+    let max = 0;
+    for (const o of orders) {
+      const m = String(o.serial || '').toUpperCase().match(new RegExp('^' + prefix + '(\\d{8})$'));
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    }
+    return prefix + String(max + 1).padStart(8, '0');
+  }
+
   function nextOrderId(orders, business) {
     const prefix = business === 'cs' ? 'CLEAR-' : 'HACK-';
     let max = 0;
@@ -254,6 +268,7 @@
     const lines = [['Order ID', o.orderId], ['Serial number', o.serial]];
     if (o.business === 'cs') {
       lines.push(['Controller', o.model]);
+      if (o.controllerSerial) lines.push(['Controller serial', o.controllerSerial]);
       lines.push(['Colour', o.colourName]);
       lines.push(['Delivery', deliveryText(settings, o.delivery)]);
       lines.push(['Installation', 'Included']);
@@ -560,7 +575,7 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
     shellItems, variantOf, VARIANT_LABEL, costBreakdown, orderCost, costsConfigured, profitOf,
     turnaround, turnaroundWindow, shippedAt, takeStock, returnStock, stockState, lowStock, isFullyPaid, invoiceLines, invoiceNumber, invoiceHtml,
     customerOf, paymentSchedule, paymentText, STATUSES, CANCELLED, statusInfo, isOpen, phoneDigits, validatePhone, customerKey, uid, emptyDB, migrate, money, num, coloursFor, deliveryOptions, deliveryText,
-    csPrice, parseGames, hackPrice, validateSerial, nextOrderId, statusLabel, orderLines,
+    csPrice, parseGames, hackPrice, validateSerial, nextSerial, nextOrderId, statusLabel, orderLines,
     buildStatusEmail, customers, hashPasscode, esc, guessSwatch, discountAmount, discountText, applyDiscount
   };
 })();

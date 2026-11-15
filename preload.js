@@ -13,5 +13,8 @@ contextBridge.exposeInMainWorld('api', {
   sendEmail: (smtp, message) => ipcRenderer.invoke('email:send', { smtp, message }),
   openMailto: (url) => ipcRenderer.invoke('open:mailto', url),
   invoicePdf: (html) => ipcRenderer.invoke('invoice:pdf', html),
-  saveInvoice: (html, filename) => ipcRenderer.invoke('invoice:save', { html, filename })
+  saveInvoice: (html, filename) => ipcRenderer.invoke('invoice:save', { html, filename }),
+  onApiCreateOrder: (fn) => ipcRenderer.on('api:createOrder', (_e, msg) => fn(msg)),
+  apiRespond: (reqId, result) => ipcRenderer.invoke('api:respond', { reqId, result }),
+  cometStatus: () => ipcRenderer.invoke('comet:status')
 });

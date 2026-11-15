@@ -2,6 +2,11 @@ const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage } = require('ele
 const path = require('path');
 const fs = require('fs');
 const nodemailer = require('nodemailer');
+const { CometApi } = require('./comet-api');
+
+let mainWin = null;
+let quitting = false;
+const cometApi = new CometApi({ getWindow: () => (mainWin && !mainWin.isDestroyed() ? mainWin : null), version: app.getVersion() });
 
 const userDir = () => app.getPath('userData');
 const dataFile = () => path.join(userDir(), 'ordertrack-data.json');
@@ -9,7 +14,7 @@ const backupFile = () => path.join(userDir(), 'ordertrack-data.backup.json');
 const secretFile = () => path.join(userDir(), 'smtp-secret.bin');
 
 function createWindow() {
-  const win = new BrowserWindow({
+  const win = mainWin = new BrowserWindow({
     width: 1280,
     height: 860,
     minWidth: 380,
@@ -25,6 +30,12 @@ function createWindow() {
     }
   });
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
+  // On a Mac, closing the window hides it so OrderTrack keeps taking orders from Comet
+  // until you quit the app (Cmd+Q).
+  win.on('close', (e) => {
+    if (process.platform === 'darwin' && !quitting) { e.preventDefault(); win.hide(); }
+  });
+  win.on('closed', () => { if (mainWin === win) mainWin = null; });
   // Open any external link in the default browser / mail app, never inside the app.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^(https?|mailto):/.test(url)) shell.openExternal(url);
@@ -51,8 +62,13 @@ ipcMain.handle('data:save', (_e, data) => {
   const tmp = file + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
   fs.renameSync(tmp, file);
+  cometApi.update(data);
   return true;
 });
+
+// ---------- Comet (iMessage orders) ----------
+ipcMain.handle('api:respond', (_e, { reqId, result }) => { cometApi.respond(reqId, result); return true; });
+ipcMain.handle('comet:status', () => ({ listening: !!cometApi.listening, port: cometApi.listening ? cometApi.listening.port : null }));
 
 ipcMain.handle('data:location', () => dataFile());
 ipcMain.handle('app:version', () => app.getVersion());
@@ -152,9 +168,15 @@ ipcMain.handle('open:mailto', (_e, url) => {
   return true;
 });
 
+app.on('before-quit', () => { quitting = true; cometApi.stop(); });
+
 app.whenReady().then(() => {
+  try { cometApi.update(JSON.parse(fs.readFileSync(dataFile(), 'utf8'))); } catch { /* no data yet */ }
   createWindow();
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  app.on('activate', () => {
+    if (mainWin && !mainWin.isDestroyed()) mainWin.show();
+    else createWindow();
+  });
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
