@@ -2295,7 +2295,7 @@
   function turnaroundCard(o) {
     const item = o.business === 'cs' ? 'controller' : 'calculator';
     const t = OT.turnaround(S(), o);
-    const head = `<div class="card-head"><h2>${hchip('truck')}Turnaround</h2>${o.receivedAt ? `<button class="btn sm" data-action="markReceived">${icon('edit')}Change date</button>` : ''}</div>`;
+    const head = `<div class="card-head"><h2>${hchip('truck')}Turnaround</h2>${o.receivedAt ? `<div class="head-btns"><button class="btn sm ghost" data-action="unreceive" title="Undo: the item has not actually arrived">${icon('x')}Not received yet</button><button class="btn sm" data-action="markReceived">${icon('edit')}Change date</button></div>` : ''}</div>`;
     if (!t) {
       return `<section class="card">${head}<div class="card-pad turn-wait">
         <div><b>Waiting for the ${item}</b><span>${o.business === 'cs' ? `Delivery is ${esc(o.delivery === 'express' ? S().cs.expressWording : S().cs.standardWording)}, so the clock starts when it arrives.` : 'The clock starts when the calculator arrives.'}</span></div>
@@ -2660,6 +2660,15 @@
       case 'cometInvite': return openCometInvite({ contact: el.dataset.contact, name: el.dataset.name, business: el.dataset.biz });
       case 'outreachRemove': case 'outreachRetry': case 'outreachOpen': return outreachAction(action, el);
       case 'markReceived': return order && markReceived(order);
+      case 'unreceive': {
+        if (!order || !order.receivedAt) return;
+        const item = order.business === 'cs' ? 'controller' : 'calculator';
+        if (!(await confirmBox(`Mark the ${item} as not received?`, `The received date (${esc(fmtDate(new Date(order.receivedAt + 'T12:00:00')))}) and the ship-by date are removed. ${esc(order.orderId)} goes back to waiting for the ${item}, and you can mark it received again when it arrives.`, 'Not received yet'))) return;
+        delete order.receivedAt;
+        order.history.push({ status: order.status, at: Date.now(), email: 'none', note: `Marked as not received yet: the ${item} has not arrived` });
+        await persist(`${order.orderId} is waiting for the ${item} again`);
+        return renderOrder();
+      }
       case 'editCost': return order && editCost(order);
       case 'quickReceive': {
         const o = DB.orders.find((x) => x.id === el.dataset.id);

@@ -1011,3 +1011,4 @@ em.pay { background: var(--blue); }
 .o-act { display: flex; align-items: center; gap: 6px; }
 .cust-actions { display: flex; justify-content: flex-end; padding: 10px 16px 8px; }
 @media (max-width: 760px) { .olist li { flex-wrap: wrap; } .o-side { align-items: flex-start; } }
+.head-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
