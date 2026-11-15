@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('api', {
   load: () => ipcRenderer.invoke('data:load'),
   save: (data) => ipcRenderer.invoke('data:save', data),
   dataLocation: () => ipcRenderer.invoke('data:location'),
+  version: () => ipcRenderer.invoke('app:version'),
   exportBackup: (data) => ipcRenderer.invoke('backup:export', data),
   importBackup: () => ipcRenderer.invoke('backup:import'),
   setSmtpPassword: (value) => ipcRenderer.invoke('secret:set', value),

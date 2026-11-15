@@ -206,7 +206,9 @@
       <div class="sb-foot">
         <button class="sb-item" data-nav="settings">${icon('gear')}Settings</button>
         <button class="sb-item" data-action="lock">${icon('lock')}Lock</button>
+        <div class="sb-version" id="appVersion"></div>
       </div>`;
+    if (api.version) api.version().then((v) => { $('#appVersion').textContent = 'Version ' + v; });
     $('.mobilebar .iconbtn').innerHTML = icon('menu');
     $('#find').addEventListener('submit', (e) => { e.preventDefault(); find($('#findInput').value); });
     $('#findInput').addEventListener('input', (e) => { const p = e.target.selectionStart; e.target.value = e.target.value.toUpperCase(); e.target.setSelectionRange(p, p); });
@@ -1205,7 +1207,7 @@
             <div class="field"><label>Confirm new passcode</label><input type="password" id="pcNew2"></div></div>
             <div class="addrow"><span style="flex:1"></span><button class="btn dark" data-action="changePass">Change passcode</button></div>`)}
 
-          ${sset('set-data', 'Data and backup', `Orders and settings are saved on this Mac at <span class="mono" style="overflow-wrap:anywhere;color:var(--ink-2)">${esc(location)}</span>. The previous save is kept alongside it.`, `
+          ${sset('set-data', 'Data and backup', `${api.version ? `You are running OrderTrack version ${esc(await api.version())}. ` : ''}Orders and settings are saved on this Mac at <span class="mono" style="overflow-wrap:anywhere;color:var(--ink-2)">${esc(location)}</span>. The previous save is kept alongside it.`, `
             <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-action="export">${icon('download')}Export backup</button><button class="btn" data-action="import">${icon('upload')}Import backup</button></div>`)}
         </div>
       </div>`;

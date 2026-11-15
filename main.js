@@ -55,6 +55,7 @@ ipcMain.handle('data:save', (_e, data) => {
 });
 
 ipcMain.handle('data:location', () => dataFile());
+ipcMain.handle('app:version', () => app.getVersion());
 
 ipcMain.handle('backup:export', async (_e, data) => {
   const stamp = new Date().toISOString().slice(0, 10);

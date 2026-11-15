@@ -628,3 +628,4 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
   .fin-grid { grid-template-columns: minmax(0, 1fr); }
   .manage-row { flex-wrap: wrap; }
 }
+.sb-version { padding: 6px 10px 0; font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }

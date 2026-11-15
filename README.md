@@ -2,21 +2,17 @@
 
 A Mac app for managing orders for two businesses: **ClearSense** (custom PS5 controller housings) and **Hackulator** (calculators hacked to play games).
 
-## Install on your Mac
+## Install or update on your Mac
 
-1. Open the repository's **Releases** page and download the DMG from the `latest` release:
-   - `OrderTrack-1.0.0-arm64.dmg` for Apple Silicon Macs (M1 and later)
-   - `OrderTrack-1.0.0-x64.dmg` for Intel Macs
-2. Open the DMG and drag **OrderTrack** into **Applications**.
-3. The app is not notarised by Apple, so the first time you open it macOS will block it. Run this once in Terminal, then open it normally:
+Paste this into Terminal. It quits OrderTrack if it is open, downloads the newest build for your Mac, replaces the app in Applications and opens it. Your orders and settings are kept.
 
-   ```bash
-   xattr -cr /Applications/OrderTrack.app
-   ```
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Zebra0723/OrderTrack/claude/magical-rubin-0c5xdx/scripts/install-mac.sh)
+```
 
-   Or go to System Settings, Privacy and Security, and click **Open Anyway**.
+To install by hand instead, download `OrderTrack-arm64.dmg` (Apple Silicon, M1 and later) or `OrderTrack-x64.dmg` (Intel) from the `latest` release. Quit OrderTrack first with Cmd+Q, drag the app into Applications and replace the old one, then run `xattr -cr /Applications/OrderTrack.app` once. That command prints nothing when it works.
 
-Every push to `main` or a `claude/*` branch rebuilds the DMGs with GitHub Actions (`.github/workflows/build-mac.yml`).
+The version number is shown at the bottom of the sidebar, so you can check you are on the newest build. Every push to `main` or a `claude/*` branch builds a new version with GitHub Actions (`.github/workflows/build-mac.yml`).
 
 ## Features
 
