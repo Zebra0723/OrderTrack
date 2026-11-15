@@ -2454,11 +2454,10 @@
         if (!a) return err(`Unknown option "${w}". Options: ${s.cs.addons.map((x) => x.name).join(', ')}`);
         if (!addons.includes(a)) addons.push(a);
       }
-      const serialPhoto = String(p.controllerSerial || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 30);
       order = {
         ...base, model, colourId: c.id, colourName: c.name, swatch: c.swatch, delivery,
         addonIds: addons.map((a) => a.id), addonNames: addons.map((a) => a.name),
-        price: OT.csPrice(s, c.id, delivery, addons.map((a) => a.id)), controllerSerial: serialPhoto
+        price: OT.csPrice(s, c.id, delivery, addons.map((a) => a.id))
       };
     } else {
       const donor = String(p.donor || '').trim().slice(0, 120);

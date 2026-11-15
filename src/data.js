@@ -110,10 +110,20 @@
         delete c.stock; delete c.lowAt; delete c.cost;
       }
     });
+    const orders = Array.isArray(db.orders) ? db.orders : [];
+    // Orders only carry their own CS/HC serial, never the serial printed on the
+    // customer's controller (Comet used to pass that along).
+    for (const o of orders) {
+      if (o && 'controllerSerial' in o) delete o.controllerSerial;
+    }
+    for (const o of orders) {
+      if (!o || !o.business || o.source !== 'comet') continue;
+      if (validateSerial(String(o.serial || '').toUpperCase(), o.business === 'cs' ? 'CS' : 'HC')) o.serial = nextSerial(orders, o.business);
+    }
     return {
       version: 1,
       security: db.security || null,
-      orders: Array.isArray(db.orders) ? db.orders : [],
+      orders,
       // People the owner asked Comet to contact over iMessage.
       outreach: Array.isArray(db.outreach) ? db.outreach : [],
       settings: {
@@ -270,7 +280,6 @@
     const lines = [['Order ID', o.orderId], ['Serial number', o.serial]];
     if (o.business === 'cs') {
       lines.push(['Controller', o.model]);
-      if (o.controllerSerial) lines.push(['Controller serial', o.controllerSerial]);
       lines.push(['Colour', o.colourName]);
       lines.push(['Delivery', deliveryText(settings, o.delivery)]);
       lines.push(['Installation', 'Included']);
