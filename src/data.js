@@ -97,7 +97,17 @@
     const d = emptyDB();
     if (!db || typeof db !== 'object') return d;
     const s = db.settings || {};
-    if (s.cs && Array.isArray(s.cs.colours)) s.cs.colours.forEach((c) => { if (!c.swatch) c.swatch = guessSwatch(c.name); });
+    if (s.cs && Array.isArray(s.cs.colours)) s.cs.colours.forEach((c) => {
+      if (!c.swatch) c.swatch = guessSwatch(c.name);
+      if ('stock' in c || 'cost' in c || 'lowAt' in c) {
+        const v = c.standard && c.standard.available ? 'standard' : 'express';
+        c[v] = c[v] || {};
+        if (c.stock != null && c[v].stock == null) c[v].stock = c.stock;
+        if (c.lowAt != null && c[v].lowAt == null) c[v].lowAt = c.lowAt;
+        if (c.cost != null && c[v].cost == null) c[v].cost = c.cost;
+        delete c.stock; delete c.lowAt; delete c.cost;
+      }
+    });
     return {
       version: 1,
       security: db.security || null,
@@ -383,16 +393,34 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
   }
 
   // ---------- Stock ----------
-  // Colours and parts carry stock (null = not tracked) and lowAt. Orders remember what
-  // they took in o.stockTaken so it can be given back exactly once.
+  // Shells are stocked separately for non express and express: each colour's standard and
+  // express objects carry stock (null = not tracked), lowAt and cost. Parts carry the same.
+  // Orders remember what they took in o.stockTaken so it can be given back exactly once.
+  const VARIANT_LABEL = { standard: 'Non express', express: 'Express' };
+  const variantOf = (o) => (o.delivery === 'express' ? 'express' : 'standard');
+  function shellItems(settings) {
+    const out = [];
+    for (const c of settings.cs.colours) {
+      for (const v of ['standard', 'express']) {
+        if (!c[v] || !c[v].available) continue;
+        out.push({ key: `${c.id}:${v}`, colour: c, variant: v, name: `${c.name}, ${VARIANT_LABEL[v].toLowerCase()}`, swatch: c.swatch, obj: c[v], stock: c[v].stock, lowAt: c[v].lowAt });
+      }
+    }
+    return out;
+  }
   function stockItem(settings, it) {
-    return it.kind === 'colour' ? settings.cs.colours.find((c) => c.id === it.id) : (settings.parts || []).find((x) => x.id === it.id);
+    if (it.kind === 'colour') {
+      const c = settings.cs.colours.find((x) => x.id === it.id);
+      return c ? c[it.variant || 'standard'] : null;
+    }
+    return (settings.parts || []).find((x) => x.id === it.id);
   }
   function stockNeeds(settings, o) {
     const needs = [];
     if (o.business === 'cs' && o.colourId) {
       const c = settings.cs.colours.find((x) => x.id === o.colourId);
-      if (c && c.stock != null) needs.push({ kind: 'colour', id: c.id });
+      const v = variantOf(o);
+      if (c && c[v] && c[v].stock != null) needs.push({ kind: 'colour', id: c.id, variant: v });
     }
     for (const part of settings.parts || []) if (part.perOrder === o.business && part.stock != null) needs.push({ kind: 'part', id: part.id });
     return needs;
@@ -413,8 +441,9 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
     if (num(x.stock) <= num(x.lowAt != null ? x.lowAt : 2)) return 'low';
     return 'ok';
   }
+  // Everything that is low or out, as { name, stock, lowAt, swatch }.
   function lowStock(settings) {
-    return [...settings.cs.colours, ...(settings.parts || [])].filter((x) => ['low', 'out'].includes(stockState(x)));
+    return [...shellItems(settings), ...(settings.parts || [])].filter((x) => ['low', 'out'].includes(stockState(x)));
   }
 
   // ---------- Costs and profit ----------
@@ -425,7 +454,8 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
     const lines = [];
     if (o.business === 'cs') {
       const col = settings.cs.colours.find((x) => x.id === o.colourId);
-      if (col && num(col.cost)) lines.push({ label: `${col.name} shell`, amount: num(col.cost) });
+      const v = variantOf(o);
+      if (col && col[v] && num(col[v].cost)) lines.push({ label: `${col.name} shell, ${VARIANT_LABEL[v].toLowerCase()}`, amount: num(col[v].cost) });
       if (num(c.csExtra)) lines.push({ label: 'Other costs per order', amount: num(c.csExtra) });
     } else {
       if (num(c.hackDonor)) lines.push({ label: 'Calculator and parts', amount: num(c.hackDonor) });
@@ -442,7 +472,7 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
   function costsConfigured(settings) {
     const c = settings.costs || {};
     return [c.postage, c.csExtra, c.hackExtra, c.hackDonor].some((v) => num(v) > 0)
-      || settings.cs.colours.some((x) => num(x.cost) > 0) || (settings.parts || []).some((x) => num(x.cost) > 0);
+      || settings.cs.colours.some((x) => num((x.standard || {}).cost) > 0 || num((x.express || {}).cost) > 0) || (settings.parts || []).some((x) => num(x.cost) > 0);
   }
   function profitOf(settings, o) { return num(o.price) - orderCost(settings, o); }
 
@@ -527,7 +557,7 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
   }
 
   window.OT = {
-    costBreakdown, orderCost, costsConfigured, profitOf,
+    shellItems, variantOf, VARIANT_LABEL, costBreakdown, orderCost, costsConfigured, profitOf,
     turnaround, turnaroundWindow, shippedAt, takeStock, returnStock, stockState, lowStock, isFullyPaid, invoiceLines, invoiceNumber, invoiceHtml,
     customerOf, paymentSchedule, paymentText, STATUSES, CANCELLED, statusInfo, isOpen, phoneDigits, validatePhone, customerKey, uid, emptyDB, migrate, money, num, coloursFor, deliveryOptions, deliveryText,
     csPrice, parseGames, hackPrice, validateSerial, nextOrderId, statusLabel, orderLines,

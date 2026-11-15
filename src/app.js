@@ -58,6 +58,7 @@
     board: '<rect x="3.5" y="4" width="5" height="16" rx="1.5"/><rect x="9.5" y="4" width="5" height="11" rx="1.5"/><rect x="15.5" y="4" width="5" height="7" rx="1.5"/>',
     list: '<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
     truck: '<path d="M2.5 6.5h11v9h-11zM13.5 9.5h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/>',
+    calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
     trend: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
     tag: '<path d="M3 12V4.5A1.5 1.5 0 0 1 4.5 3H12l9 9-9 9-9-9z"/><circle cx="7.5" cy="7.5" r="1.5"/>'
   };
@@ -667,10 +668,11 @@
       model: 'model', colourId: 'colour', delivery: 'delivery', addonIds: 'options', donor: 'donor calculator', extraGames: 'extra games', notes: 'notes'
     };
     const changed = Object.keys(labels).filter((k) => k in fields && JSON.stringify(fields[k] ?? '') !== JSON.stringify(o[k] ?? '')).map((k) => labels[k]);
-    const oldDisc = fmtDisc(o.discount), oldPay = fmtPay(o.payment), oldPrice = o.price, oldColour = o.colourId;
+    const oldDisc = fmtDisc(o.discount), oldPay = fmtPay(o.payment), oldPrice = o.price, oldColour = o.colourId, oldDelivery = o.delivery;
     Object.assign(o, fields);
-    if (o.colourId !== oldColour && o.status !== 'cancelled') { OT.returnStock(S(), o); OT.takeStock(S(), o); }
-    if (o.colourId !== oldColour) o.costs = OT.costBreakdown(S(), o);
+    const shellChanged = o.colourId !== oldColour || o.delivery !== oldDelivery;
+    if (shellChanged && o.status !== 'cancelled') { OT.returnStock(S(), o); OT.takeStock(S(), o); }
+    if (shellChanged) o.costs = OT.costBreakdown(S(), o);
     o.subtotal = subtotal;
     o.price = subtotal;
     OT.applyDiscount(o, disc);
@@ -725,7 +727,7 @@
         ? '<div class="placeholder-note">Choose a model to see its colours.</div>'
         : list.length ? `<div class="tiles colours">${list.map((c) => {
           const prices = OT.deliveryOptions(c).map((o) => o.price);
-          return `<label class="tile"><input type="radio" name="colour" value="${c.id}" ${c.id === prev ? 'checked' : ''}><span class="tile-art">${controllerArt(c.swatch, c.name, 'mini')}</span><span class="t-main"><span class="t-title">${esc(c.name)}</span><span class="t-sub">from ${money(Math.min(...prices))}${c.stock != null ? `<span class="stk ${OT.stockState(c)}">${stockLabel(c)}</span>` : ''}</span></span></label>`;
+          return `<label class="tile"><input type="radio" name="colour" value="${c.id}" ${c.id === prev ? 'checked' : ''}><span class="tile-art">${controllerArt(c.swatch, c.name, 'mini')}</span><span class="t-main"><span class="t-title">${esc(c.name)}</span><span class="t-sub">from ${money(Math.min(...prices))}${colourStockChip(c)}</span></span></label>`;
         }).join('')}</div>` : '<div class="placeholder-note">No colours are set up for this model.</div>';
       if (missing) $('#colourBox').insertAdjacentHTML('afterbegin', `<div class="callout" style="margin-bottom:10px">${icon('info')}<div>This order's colour, ${esc(ed.colourName)}, is no longer offered for ${esc(model)} in Settings. Choose a colour to save changes.</div></div>`);
       drawDelivery();
@@ -737,7 +739,7 @@
       const opts = OT.deliveryOptions(c);
       $('#deliveryBox').innerHTML = !opts.length
         ? '<div class="placeholder-note">Choose a colour to see delivery options.</div>'
-        : `<div class="tiles delivery">${opts.map((o) => `<label class="tile"><input type="radio" name="delivery" value="${o.id}" ${o.id === prev || opts.length === 1 ? 'checked' : ''}><span class="radio"></span><span class="t-main"><span class="t-title">${o.label}</span><span class="t-sub">${esc(o.id === 'express' ? s.expressWording : s.standardWording)}</span></span><span class="t-price">${money(o.price)}</span></label>`).join('')}</div>`;
+        : `<div class="tiles delivery">${opts.map((o) => `<label class="tile"><input type="radio" name="delivery" value="${o.id}" ${o.id === prev || opts.length === 1 ? 'checked' : ''}><span class="radio"></span><span class="t-main"><span class="t-title">${o.label}</span><span class="t-sub">${esc(o.id === 'express' ? s.expressWording : s.standardWording)}</span>${c[o.id] && c[o.id].stock != null ? `<span class="stk ${OT.stockState(c[o.id])}" style="margin:4px 0 0">${stockLabel(c[o.id])}</span>` : ''}</span><span class="t-price">${money(o.price)}</span></label>`).join('')}</div>`;
       drawSummary();
     }
     function drawSummary() {
@@ -1715,7 +1717,7 @@
   let resizeTimer;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => $$('[data-chart]').forEach((h) => h.__draw && h.__draw()), 120);
+    resizeTimer = setTimeout(() => { $$('[data-chart]').forEach((h) => h.__draw && h.__draw()); if (route.page === 'home') balanceHome(); }, 120);
   });
 
   function pipelineBar(orders) {
@@ -1844,14 +1846,22 @@
           <div class="progress slim"><i style="width:${Math.round((pay.collected / Math.max(pay.collected + pay.outstanding, 1)) * 100)}%"></i></div></div>
       </div>
 
-      <div class="home-grid">
+      <div class="home-grid two pair">
         <section class="card attention">
           <div class="card-head"><h2>${hchip('alert')}Needs attention</h2><span class="meta">${att.length || 'None'}</span></div>
-          <div class="card-pad">${att.length ? `<ul class="att">${att.slice(0, 6).map((a) => `<li class="${a.tone}"><button ${a.open ? `data-open="${a.open}"` : a.nav ? `data-nav="${a.nav}"` : `data-action="showPending" data-biz="${a.pending}"`}>
-              <span class="att-ic">${icon(a.icon)}</span><span class="att-t"><b>${esc(a.title)}</b><span>${esc(a.sub)}</span></span>${icon('chev')}</button></li>`).join('')}</ul>${att.length > 6 ? `<p class="muted small-note">And ${att.length - 6} more. Overdue items also show on each order.</p>` : ''}`
-            : `<div class="caught"><div class="art-ok">${icon('check')}</div><b>All caught up</b><span>No overdue orders, late payments or low stock.</span></div>`}</div>
+          <div class="card-pad">${att.length ? `<ul class="att">${att.slice(0, 10).map((a) => `<li class="${a.tone}"><button ${a.open ? `data-open="${a.open}"` : a.nav ? `data-nav="${a.nav}"` : `data-action="showPending" data-biz="${a.pending}"`}>
+              <span class="att-ic">${icon(a.icon)}</span><span class="att-t"><b>${esc(a.title)}</b><span>${esc(a.sub)}</span></span>${icon('chev')}</button></li>`).join('')}</ul><p class="muted small-note att-more" data-total="${att.length}" hidden></p>`
+            : `<div class="caught"><div class="art-ok">${icon('check')}</div><b>All caught up</b><span>Nothing needs you right now.</span>
+              <ul class="allclear">
+                <li>${icon('check')}<span>Every open order is on time</span><em>${open.length} open</em></li>
+                <li>${icon('check')}<span>No late payments</span><em>${money(pay.outstanding)} to collect</em></li>
+                <li>${icon('check')}<span>Stock levels are fine</span><em>${OT.shellItems(S()).filter((x) => x.stock != null).length ? 'tracked' : 'not tracked yet'}</em></li>
+                <li>${icon('check')}<span>No orders waiting to be confirmed</span><em>${orders.filter((o) => o.status === 'pending').length} pending</em></li>
+              </ul></div>`}</div>
         </section>
-        <div class="stack">
+        ${comingUpCard(12)}
+      </div>
+      <div class="home-grid two bizrow">
           ${['cs', 'hack'].map((b) => {
             const bo = orders.filter((o) => o.business === b);
             const rev = live(bo).filter((o) => o.createdAt >= ms).reduce((s, o) => s + num(o.price), 0);
@@ -1862,7 +1872,6 @@
                 ${pipelineBar(bo)}</div>
             </section>`;
           }).join('')}
-        </div>
       </div>
 
       <div class="home-grid two">
@@ -1886,13 +1895,142 @@
         </section>
       </div>`;
     mountChart('homeChart', cfg);
+    balanceHome();
+    if (document.fonts) document.fonts.ready.then(() => { if (route.page === 'home') balanceHome(); });
+  }
+
+  // Row 1 holds two lists. Both cards stretch to the same height; if one list is much
+  // longer, it is shortened (never below 4 items, with "And N more") so neither card is
+  // left with a large empty area.
+  function balanceHome() {
+    const pair = $('.home-grid.pair');
+    if (!pair) return;
+    const attCard = $('.attention', pair), cu = $('.comingup', pair);
+    const attItems = $$('.att > li', attCard), attMore = $('.att-more', attCard);
+    const agItems = $$('.ag-it', cu), days = $$('.ag-day', cu).filter((d) => !d.closest('.waiting')), agMore = $('.ag-more', cu);
+    const setAtt = (n) => {
+      attItems.forEach((x, i) => { x.hidden = i >= n; });
+      if (attMore) {
+        const extra = Number(attMore.dataset.total) - Math.min(n, attItems.length);
+        attMore.hidden = extra <= 0;
+        attMore.textContent = `And ${extra} more. Overdue items also show on each order.`;
+      }
+    };
+    pair.classList.remove('stretch');
+    let a = Math.min(attItems.length, 6), g = Math.min(agItems.length, 6);
+    setAtt(a);
+    trimAgenda(agItems, days, agMore, g);
+    if (getComputedStyle(pair).gridTemplateColumns.split(' ').length >= 2) {
+      // Grow the shorter list first, then shorten the longer one; stop when level or stuck.
+      let lastDir = 0;
+      for (let guard = 0; guard < 30; guard++) {
+        const diff = attCard.offsetHeight - cu.offsetHeight;
+        let dir = 0;
+        if (diff < -60) {
+          if (a < attItems.length) { a++; setAtt(a); dir = 1; } else if (g > 4) { g--; trimAgenda(agItems, days, agMore, g); dir = 2; }
+        } else if (diff > 60) {
+          if (g < agItems.length) { g++; trimAgenda(agItems, days, agMore, g); dir = 3; } else if (a > 4) { a--; setAtt(a); dir = 4; }
+        }
+        if (!dir || (lastDir && ((lastDir === 1 && dir === 4) || (lastDir === 3 && dir === 2) || (lastDir === 4 && dir === 1) || (lastDir === 2 && dir === 3)))) break;
+        lastDir = dir;
+      }
+    }
+    pair.classList.add('stretch');
+  }
+
+  function trimAgenda(items, days, more, n) {
+    items.forEach((x, i) => { x.hidden = i >= n; });
+    days.forEach((d) => {
+      let el = d.nextElementSibling, any = false;
+      while (el && !el.classList.contains('ag-day')) { if (!el.hidden) any = true; el = el.nextElementSibling; }
+      d.hidden = !any;
+    });
+    if (more) {
+      const extra = Number(more.dataset.total) - Math.min(n, items.length);
+      more.hidden = extra <= 0;
+      more.textContent = `And ${extra} more in the next 2 weeks.`;
+    }
+  }
+
+  // Ship-by deadlines and finance payments due over the next two weeks.
+  function upcomingEvents(days) {
+    const today = startOfDay(new Date());
+    const end = today.getTime() + days * DAYMS;
+    const ev = [];
+    for (const o of DB.orders.filter(OT.isOpen)) {
+      const t = OT.turnaround(S(), o);
+      if (t && !t.shippedAt && t.by >= today && t.by.getTime() < end) {
+        ev.push({ date: startOfDay(t.by), kind: 'ship', o, title: `Ship ${o.orderId}`, sub: `${o.customerName}, ${o.business === 'cs' ? o.colourName : o.donor}` });
+      }
+    }
+    for (const o of live(DB.orders)) {
+      if (!o.payment || o.payment.method !== 'finance') continue;
+      const sched = OT.paymentSchedule(o);
+      sched.forEach((x) => {
+        if (!x.paid && x.due >= today && x.due.getTime() < end) ev.push({ date: startOfDay(x.due), kind: 'pay', o, title: `${money(x.amount)} due from ${o.customerName}`, sub: `Payment ${x.n} of ${sched.length} for ${o.orderId}` });
+      });
+    }
+    return ev.sort((a, b) => a.date - b.date || (a.kind === 'ship' ? -1 : 1));
+  }
+
+  function comingUpCard(limit) {
+    const today = startOfDay(new Date());
+    const ev = upcomingEvents(14);
+    const dayLabel = (d) => {
+      const diff = Math.round((d - today) / DAYMS);
+      return diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    };
+    const week = Array.from({ length: 7 }, (_, i) => new Date(today.getTime() + i * DAYMS));
+    const waiting = DB.orders.filter((o) => OT.isOpen(o) && !o.receivedAt && ['confirmed', 'in_progress'].includes(o.status));
+    const shown = ev.slice(0, limit);
+    let lastLabel = '';
+    return `<section class="card comingup">
+      <div class="card-head"><h2>${hchip('calendar')}Coming up</h2><span class="meta">next 2 weeks</span></div>
+      <div class="card-pad">
+        <div class="weekstrip">${week.map((d, i) => {
+          const day = ev.filter((e) => e.date.getTime() === d.getTime());
+          return `<div class="wd${i === 0 ? ' today' : ''}${day.length ? ' has' : ''}" title="${esc(d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }))}${day.length ? `: ${day.length} due` : ''}">
+            <span>${d.toLocaleDateString('en-GB', { weekday: 'short' })}</span><b>${d.getDate()}</b>
+            <i>${day.filter((e) => e.kind === 'ship').length ? '<em class="ship"></em>' : ''}${day.filter((e) => e.kind === 'pay').length ? '<em class="pay"></em>' : ''}</i></div>`;
+        }).join('')}</div>
+        ${shown.length ? `<ul class="agenda">${shown.map((e) => {
+          const lbl = dayLabel(e.date);
+          const head = lbl !== lastLabel ? `<li class="ag-day">${esc(lbl)}</li>` : '';
+          lastLabel = lbl;
+          return `${head}<li class="ag-it ${e.kind}" data-open="${e.o.id}"><span class="ag-ic">${icon(e.kind === 'ship' ? 'truck' : 'coins')}</span><span class="ag-t"><b>${esc(e.title)}</b><span>${esc(e.sub)}</span></span>${icon('chev')}</li>`;
+        }).join('')}</ul><p class="muted small-note ag-more" data-total="${ev.length}" ${ev.length > shown.length ? '' : 'hidden'}>And ${ev.length - shown.length} more in the next 2 weeks.</p>`
+          : `<div class="ag-empty">${icon('calendar')}<div><b>Nothing due in the next 2 weeks</b><span>Ship-by dates and finance payments show up here once items arrive and plans are set.</span></div></div>`}
+        ${waiting.length ? `<div class="waiting">
+          <div class="ag-day">Waiting to arrive<span>${waiting.length}</span></div>
+          <ul>${waiting.slice(0, 3).map((o) => {
+            const since = (o.history.find((h) => h.status === 'confirmed') || o.history[0]).at;
+            return `<li><span class="ag-ic wait" data-open="${o.id}">${icon(o.business === 'cs' ? 'pad' : 'calc')}</span>
+              <span class="ag-t" data-open="${o.id}"><b>${esc(o.orderId)}, ${esc(o.customerName)}</b><span>${o.business === 'cs' ? 'Controller' : 'Calculator'} not here yet, confirmed ${ago(since).toLowerCase()}</span></span>
+              <button class="btn sm" data-action="quickReceive" data-id="${o.id}" title="Mark as arrived today">${icon('check')}Arrived</button></li>`;
+          }).join('')}</ul>
+          ${waiting.length > 3 ? `<p class="muted small-note">And ${waiting.length - 3} more waiting.</p>` : ''}
+        </div>` : ''}
+        <div class="legend-mini"><span><em class="ship"></em>Ship by</span><span><em class="pay"></em>Payment due</span></div>
+      </div>
+    </section>`;
   }
 
   function stockSnapshot() {
-    const tracked = [...S().cs.colours, ...(S().parts || [])].filter((x) => x.stock != null);
+    const tracked = [...OT.shellItems(S()), ...(S().parts || [])].filter((x) => x.stock != null);
     if (!tracked.length) return `<div class="caught"><div class="art-ok neutral">${icon('box')}</div><b>Stock is not tracked yet</b><span>Add counts on the Stock page to get low stock warnings.</span><button class="btn sm" data-nav="stock">Set up stock</button></div>`;
     const rows = tracked.sort((a, b) => num(a.stock) - num(b.stock)).slice(0, 6);
     return `<ul class="stocklist">${rows.map((x) => `<li>${x.swatch ? swatch(x.swatch) : `<span class="calcmark">${icon('box')}</span>`}<span>${esc(x.name)}</span><span class="stk ${OT.stockState(x)}">${stockLabel(x)}</span></li>`).join('')}</ul>`;
+  }
+
+  // One chip for a colour tile: the worst state across its tracked delivery types.
+  function colourStockChip(c) {
+    const vs = ['standard', 'express'].filter((v) => c[v] && c[v].available && c[v].stock != null).map((v) => c[v]);
+    if (!vs.length) return '';
+    const total = vs.reduce((t, x) => t + Math.max(num(x.stock), 0), 0);
+    const states = vs.map((x) => OT.stockState(x));
+    const st = states.every((x) => x === 'out') ? 'out' : states.includes('out') || states.includes('low') ? 'low' : 'ok';
+    const label = st === 'out' ? 'Out of stock' : st === 'low' && states.includes('out') ? 'Some out' : st === 'low' ? `${total} left` : `${total} in stock`;
+    return `<span class="stk ${st}">${label}</span>`;
   }
 
   const stockLabel = (x) => ({ untracked: 'Not tracked', out: 'Out of stock', low: `${num(x.stock)} left`, ok: `${num(x.stock)} in stock` })[OT.stockState(x)];
@@ -1977,7 +2115,7 @@
   // ---------- Stock ----------
   function renderStock() {
     const s = S();
-    const all = [...s.cs.colours, ...(s.parts || [])];
+    const all = [...OT.shellItems(s), ...(s.parts || [])];
     const tracked = all.filter((x) => x.stock != null);
     const low = all.filter((x) => OT.stockState(x) === 'low').length, out = all.filter((x) => OT.stockState(x) === 'out').length;
     const stepper = (kind, id, x) => x.stock == null
@@ -1987,18 +2125,26 @@
       <div class="pagehead"><div><div class="crumb"><span class="bar"></span>Inventory</div><h1>Stock</h1><p class="lede">Stock goes down by one when an order is created and back up if it is cancelled or deleted before shipping.</p></div></div>
       <div class="tiles4">
         <div class="card tile4"><div class="t4-top">${hchip('box')}<span>Items tracked</span></div><div class="t4-v">${tracked.length}</div><div class="t4-sub">of ${all.length} colours and parts</div></div>
-        <div class="card tile4"><div class="t4-top">${hchip('pad')}<span>Shells in stock</span></div><div class="t4-v">${s.cs.colours.filter((c) => c.stock != null).reduce((t, c) => t + Math.max(num(c.stock), 0), 0)}</div><div class="t4-sub">across all colours</div></div>
+        <div class="card tile4"><div class="t4-top">${hchip('pad')}<span>Shells in stock</span></div><div class="t4-v">${OT.shellItems(s).filter((x) => x.stock != null).reduce((t, x) => t + Math.max(num(x.stock), 0), 0)}</div><div class="t4-sub">non express and express</div></div>
         <div class="card tile4"><div class="t4-top">${hchip('alert')}<span>Running low</span></div><div class="t4-v">${low}</div><div class="t4-sub">at or below the warning level</div></div>
         <div class="card tile4"><div class="t4-top">${hchip('alert')}<span>Out of stock</span></div><div class="t4-v">${out}</div><div class="t4-sub">${out ? '<span class="down">Restock soon</span>' : 'Nothing out'}</div></div>
       </div>
       <section class="card sset">
-        <div class="sset-head"><h2>${esc(bizName('cs'))} shells</h2><p>One shell is used per order in that colour. Set the warning level to get a low stock alert on the Home page.</p></div>
-        <div class="sset-body"><div class="shellgrid">${s.cs.colours.map((c) => `<div class="shell ${OT.stockState(c)}">
+        <div class="sset-head"><h2>${esc(bizName('cs'))} shells</h2><p>Non express and express shells are stocked and costed separately. One is used per order, matching its colour and delivery type. Set a warning level to get low stock alerts on Home.</p></div>
+        <div class="sset-body"><div class="shellgrid">${s.cs.colours.map((c) => {
+          const vs = ['standard', 'express'].filter((v) => c[v] && c[v].available);
+          const worst = vs.map((v) => OT.stockState(c[v])).sort((a, b) => ['out', 'low', 'ok', 'untracked'].indexOf(a) - ['out', 'low', 'ok', 'untracked'].indexOf(b))[0] || 'untracked';
+          return `<div class="shell ${worst}">
             <div class="sh-art">${controllerArt(c.swatch, c.name)}</div>
-            <div class="sh-name"><b>${esc(c.name)}</b><span class="stk ${OT.stockState(c)}">${stockLabel(c)}</span></div>
-            <label class="costat">Cost per shell <span class="prefix"><input type="number" min="0" step="0.01" data-cost="colour:${c.id}" value="${esc(num(c.cost))}"></span></label>
-            <div class="sh-ctl">${stepper('colour', c.id, c)}${c.stock != null ? `<label class="lowat">Warn at <input type="number" min="0" data-lowat="colour:${c.id}" value="${esc(c.lowAt != null ? c.lowAt : 2)}"></label>` : ''}</div>
-          </div>`).join('')}</div></div>
+            <div class="sh-name"><b>${esc(c.name)}</b></div>
+            ${vs.map((v) => { const x = c[v]; const id = `${c.id}:${v}`; return `<div class="variant">
+              <div class="vh"><span>${OT.VARIANT_LABEL[v]}</span><span class="stk ${OT.stockState(x)}">${stockLabel(x)}</span></div>
+              <label class="costat">Cost per shell <span class="prefix"><input type="number" min="0" step="0.01" data-cost="colour:${id}" value="${esc(num(x.cost))}"></span></label>
+              <div class="sh-ctl">${stepper('colour', id, x)}${x.stock != null ? `<label class="lowat">Warn at <input type="number" min="0" data-lowat="colour:${id}" value="${esc(x.lowAt != null ? x.lowAt : 2)}"></label>` : ''}</div>
+            </div>`; }).join('')}
+            ${vs.length ? '' : '<div class="placeholder-note">Not offered on any delivery type.</div>'}
+          </div>`;
+        }).join('')}</div></div>
       </section>
       <section class="card sset" style="margin-top:16px">
         <div class="sset-head"><h2>Other parts</h2><p>Anything else you keep in stock, like screws, screen protectors or batteries. Choose whether one is used automatically per order.</p></div>
@@ -2014,7 +2160,12 @@
           <div class="addrow"><input type="text" id="newPart" placeholder="New part, for example Screen protector"><button class="btn" data-action="addPart">${icon('plus')}Add part</button></div>
         </div>
       </section>`;
-    const find = (key) => { const [kind, id] = key.split(':'); return kind === 'colour' ? s.cs.colours.find((c) => c.id === id) : s.parts.find((p) => p.id === id); };
+    const find = (key) => {
+      const [kind, id, v] = key.split(':');
+      if (kind !== 'colour') return s.parts.find((p) => p.id === id);
+      const c = s.cs.colours.find((x) => x.id === id);
+      return c[v || 'standard'];
+    };
     $$('[data-stock]').forEach((el) => el.addEventListener('change', async () => { find(el.dataset.stock).stock = Math.round(num(el.value)); await persist('Stock updated'); renderStock(); }));
     $$('[data-cost]').forEach((el) => el.addEventListener('change', async () => { find(el.dataset.cost).cost = Math.max(0, Math.round(num(el.value) * 100) / 100); await persist('Cost saved. New orders use it for profit.'); }));
     $$('[data-lowat]').forEach((el) => el.addEventListener('change', async () => { find(el.dataset.lowat).lowAt = Math.max(0, Math.round(num(el.value))); await persist('Warning level saved'); renderStock(); }));
@@ -2033,10 +2184,17 @@
 
   async function stockAction(action, el) {
     const s = S();
-    const item = () => (el.dataset.kind === 'colour' ? s.cs.colours.find((c) => c.id === el.dataset.id) : s.parts.find((p) => p.id === el.dataset.id));
+    const item = () => {
+      if (el.dataset.kind !== 'colour') return s.parts.find((p) => p.id === el.dataset.id);
+      const [id, v] = el.dataset.id.split(':');
+      const c = s.cs.colours.find((x) => x.id === id);
+      const x = c[v || 'standard'];
+      Object.defineProperty(x, 'label', { value: `${c.name}, ${OT.VARIANT_LABEL[v || 'standard'].toLowerCase()}`, configurable: true, enumerable: false });
+      return x;
+    };
     const y = content.scrollTop;
     const redo = async (msg) => { await persist(msg); renderStock(); content.scrollTop = y; };
-    if (action === 'trackStock') { const x = item(); x.stock = 0; if (x.lowAt == null) x.lowAt = 2; return redo(`Tracking ${x.name}. Enter how many you have.`); }
+    if (action === 'trackStock') { const x = item(); x.stock = 0; if (x.lowAt == null) x.lowAt = 2; return redo(`Tracking ${x.label || x.name}. Enter how many you have.`); }
     if (action === 'stockStep') { const x = item(); x.stock = num(x.stock) + Number(el.dataset.step); return redo(); }
     if (action === 'addPart') {
       const name = $('#newPart').value.trim();
@@ -2226,6 +2384,17 @@
       case 'editOrder': return order && go('edit', { id: order.id, biz: order.business });
       case 'markReceived': return order && markReceived(order);
       case 'editCost': return order && editCost(order);
+      case 'quickReceive': {
+        const o = DB.orders.find((x) => x.id === el.dataset.id);
+        if (!o) return;
+        o.receivedAt = todayStr();
+        o.history.push({ status: o.status, at: Date.now(), email: 'none', note: `${o.business === 'cs' ? 'Controller' : 'Calculator'} received ${fmtDate(new Date())}` });
+        await persist();
+        render();
+        const t = OT.turnaround(S(), o);
+        toast(`${o.orderId} marked as arrived. Ship by ${fmtDate(t.by)}.`);
+        return;
+      }
       case 'invoiceSave': return order && saveInvoice(order);
       case 'invoiceEmail': return order && emailInvoice(order);
       case 'showPending': listState[el.dataset.biz].tab = 'pending'; listState[el.dataset.biz].view = 'list'; return go(el.dataset.biz);
