@@ -34,6 +34,7 @@ The version number is shown at the bottom of the sidebar, so you can check you a
 - Turnaround tracking: mark when the controller or calculator arrives (or tick it when changing status) and each order gets a ship-by date, with due soon and overdue warnings. Windows are set in Settings, Turnaround.
 - Reports: revenue by month, average order, discounts, money to collect, on-time rate, top colours, models, donor calculators, extra games, payments, turnaround and top customers, filtered by period and business.
 - Stock: counts per ClearSense colour and for any extra parts, taken automatically when orders are created and returned when cancelled, with low stock warnings.
+- Profit tracking: set a cost per shell colour and per part on the Stock page, plus postage and other per-order costs in Settings, Costs. Each order shows its cost, profit and margin (and you can set any order's cost by hand). Home shows profit this month and Reports shows profit, margin and profit per colour. Orders keep the costs from when they were created.
 - Extra notes on each order, private to you and never sent to customers.
 - Cancel an order (kept on record, left out of open orders and totals, can be reopened) or delete it permanently.
 - Passcode lock on launch.

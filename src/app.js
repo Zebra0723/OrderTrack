@@ -478,6 +478,7 @@
     order.createdAt = now;
     order.history = [{ status: 'pending', at: now, email: 'none' }];
     OT.takeStock(S(), order);
+    order.costs = OT.costBreakdown(S(), order);
     DB.orders.push(order);
     if (await persist(`Order ${order.orderId} created`)) go('order', { id: order.id, biz: order.business });
   }
@@ -669,6 +670,7 @@
     const oldDisc = fmtDisc(o.discount), oldPay = fmtPay(o.payment), oldPrice = o.price, oldColour = o.colourId;
     Object.assign(o, fields);
     if (o.colourId !== oldColour && o.status !== 'cancelled') { OT.returnStock(S(), o); OT.takeStock(S(), o); }
+    if (o.colourId !== oldColour) o.costs = OT.costBreakdown(S(), o);
     o.subtotal = subtotal;
     o.price = subtotal;
     OT.applyDiscount(o, disc);
@@ -964,6 +966,7 @@
               <dl class="dl">
                 ${hasDisc ? `<dt>Subtotal</dt><dd class="num">${money(o.subtotal)}</dd><dt>Discount</dt><dd><span class="disc-val num">-${money(o.discount.amount)}</span><span class="muted" style="font-weight:500">${esc(discWhy)}</span></dd>` : ''}
                 <dt>Total</dt><dd class="num" style="font-size:16px">${money(o.price)}</dd>
+                ${profitRows(o)}
               </dl>
               <div class="inv-row"><button class="btn sm" data-action="invoiceSave">${icon('file')}Download invoice</button><button class="btn sm" data-action="invoiceEmail" ${o.customerEmail ? '' : 'disabled'}>${icon('send')}Email invoice</button></div>
             </div>
@@ -1243,7 +1246,7 @@
 
   const SETTINGS_SECTIONS = [
     ['set-colours', 'Colours'], ['set-models', 'BDM models'], ['set-options', 'Options'], ['set-discounts', 'Discounts'], ['set-delivery', 'Delivery wording'],
-    ['set-hack', 'Hackulator'], ['set-invoice', 'Invoices'], ['set-turn', 'Turnaround'], ['set-email', 'Email'], ['set-general', 'Business names'], ['set-pass', 'Passcode'], ['set-data', 'Data and backup']
+    ['set-hack', 'Hackulator'], ['set-costs', 'Costs'], ['set-invoice', 'Invoices'], ['set-turn', 'Turnaround'], ['set-email', 'Email'], ['set-general', 'Business names'], ['set-pass', 'Passcode'], ['set-data', 'Data and backup']
   ];
 
   async function renderSettings() {
@@ -1297,6 +1300,13 @@
             <div class="field"><label>Base price</label>${priceInput('data-set="hack.basePrice" data-num', s.hack.basePrice)}</div>
             <div class="field"><label>Extra game price</label>${priceInput('data-set="hack.extraGamePrice" data-num', s.hack.extraGamePrice)}</div>
             <div class="field full"><label>Included games, one per line</label><textarea data-set="hack.includedGames" data-lines>${esc(s.hack.includedGames.join('\n'))}</textarea></div></div>`)}
+
+          ${sset('set-costs', 'Costs and profit', 'What each order costs you, used to show profit on orders, Home and Reports. Shell and part costs are set on the Stock page. Each order keeps the costs from when it was created, and you can change any order by hand.', `<div class="grid">
+            <div class="field"><label>Postage per order</label><div class="prefix"><input type="number" step="0.01" min="0" data-set="costs.postage" data-num value="${esc(s.costs.postage)}"></div></div>
+            <div class="field"><label>${esc(bizName('cs'))}, other costs per order</label><div class="prefix"><input type="number" step="0.01" min="0" data-set="costs.csExtra" data-num value="${esc(s.costs.csExtra)}"></div><div class="hint">For example packaging or buttons. The shell cost comes from Stock.</div></div>
+            <div class="field"><label>${esc(bizName('hack'))}, calculator and parts per order</label><div class="prefix"><input type="number" step="0.01" min="0" data-set="costs.hackDonor" data-num value="${esc(s.costs.hackDonor)}"></div><div class="hint">Leave at zero if customers send their own calculator.</div></div>
+            <div class="field"><label>${esc(bizName('hack'))}, other costs per order</label><div class="prefix"><input type="number" step="0.01" min="0" data-set="costs.hackExtra" data-num value="${esc(s.costs.hackExtra)}"></div></div></div>
+            <div class="addrow"><span style="flex:1"></span><button class="btn" data-nav="stock">${icon('box')}Set shell and part costs</button></div>`)}
 
           ${sset('set-invoice', 'Invoices', 'Shown on every invoice PDF. The invoice number is INV- followed by the order ID.', `<div class="grid">
             <div class="field"><label>Your address and contact details</label><textarea data-set="invoice.address" style="min-height:96px" placeholder="Name, address, email, phone">${esc(s.invoice.address)}</textarea></div>
@@ -1823,7 +1833,7 @@
 
       <div class="tiles4">
         <div class="card tile4"><div class="t4-top">${hchip('trend')}<span>Revenue this month</span></div><div class="t4-v">${money(thisMonth)}</div>
-          <div class="t4-sub">${delta == null ? 'No orders last month' : `<span class="${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : ''}${delta}%</span> vs ${lastMonthName}`}</div>${spark(weekBuckets(L, 8, (o) => num(o.price)), '#F06A55')}</div>
+          <div class="t4-sub">${delta == null ? 'No orders last month' : `<span class="${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' : ''}${delta}%</span> vs ${lastMonthName}`}</div>${profitLine(L.filter((o) => o.createdAt >= ms))}${spark(weekBuckets(L, 8, (o) => num(o.price)), '#F06A55')}</div>
         <div class="card tile4"><div class="t4-top">${hchip('box')}<span>Open orders</span></div><div class="t4-v">${open.length}</div>
           <div class="t4-sub">${open.filter((o) => o.status === 'in_progress').length} in progress, ${open.filter((o) => o.status === 'shipped').length} shipped</div>${spark(weekBuckets(orders, 8, () => 1), '#3456A3')}</div>
         <div class="card tile4"><div class="t4-top">${hchip('clock')}<span>Due this week</span></div><div class="t4-v">${dueWeek.length}</div>
@@ -1926,7 +1936,8 @@
 
       <div class="tiles4 five">
         <div class="card tile4"><div class="t4-top">${hchip('trend')}<span>Revenue</span></div><div class="t4-v">${money(revenue)}</div><div class="t4-sub">${scope.length} order${scope.length === 1 ? '' : 's'}</div></div>
-        <div class="card tile4"><div class="t4-top">${hchip('tag')}<span>Average order</span></div><div class="t4-v">${money(scope.length ? revenue / scope.length : 0)}</div><div class="t4-sub">after discounts</div></div>
+        ${OT.costsConfigured(S()) ? (() => { const pr = scope.reduce((t, o) => t + OT.profitOf(S(), o), 0); return `<div class="card tile4"><div class="t4-top">${hchip('coins')}<span>Profit</span></div><div class="t4-v ${pr < 0 ? 'down' : ''}">${money(pr)}</div><div class="t4-sub">${revenue ? Math.round((pr / revenue) * 100) : 0}% margin, ${money(scope.length ? revenue / scope.length : 0)} average order</div></div>`; })()
+          : `<div class="card tile4"><div class="t4-top">${hchip('coins')}<span>Profit</span></div><div class="t4-v muted">Not set up</div><div class="t4-sub"><button class="linkbtn" data-nav="settings">Add your costs</button> to see profit</div></div>`}
         <div class="card tile4"><div class="t4-top">${hchip('tag')}<span>Discounts given</span></div><div class="t4-v">${money(discounts)}</div><div class="t4-sub">${scope.filter((o) => o.discount && o.discount.amount > 0).length} discounted orders</div></div>
         <div class="card tile4"><div class="t4-top">${hchip('coins')}<span>Still to collect</span></div><div class="t4-v">${money(pay.outstanding)}</div><div class="t4-sub">${pay.overdueCount ? `<span class="down">${money(pay.overdueAmount)} overdue</span>` : `${money(pay.collected)} collected`}</div></div>
         <div class="card tile4"><div class="t4-top">${hchip('truck')}<span>On time</span></div><div class="t4-v">${turn.length ? Math.round((onTime / turn.length) * 100) + '%' : 'No data'}</div><div class="t4-sub">${turn.length} shipped with a received date</div></div>
@@ -1936,7 +1947,7 @@
 
       <div class="home-grid two" style="margin-top:16px">
         ${st.biz !== 'hack' ? `<section class="card"><div class="card-head"><h2>${hchip('pad')}Top colours</h2><span class="meta">${esc(bizName('cs'))}</span></div>
-          <div class="card-pad">${barList(colours.map(([k, g]) => ({ label: `${swatch(swatchOf(g.o))}<span>${esc(k)}<em>${money(g.rev)}</em></span>`, value: g.n, display: `${g.n} order${g.n === 1 ? '' : 's'}` })), CHART.cs, 'No ClearSense orders in this period.')}</div></section>
+          <div class="card-pad">${barList(colours.map(([k, g]) => ({ label: `${swatch(swatchOf(g.o))}<span>${esc(k)}<em>${money(g.rev)}${OT.costsConfigured(S()) ? `, ${money(cs.filter((o) => o.colourName === k).reduce((t, o) => t + OT.profitOf(S(), o), 0))} profit` : ''}</em></span>`, value: g.n, display: `${g.n} order${g.n === 1 ? '' : 's'}` })), CHART.cs, 'No ClearSense orders in this period.')}</div></section>
         <section class="card"><div class="card-head"><h2>${hchip('pad')}BDM models</h2><span class="meta">${esc(bizName('cs'))}</span></div>
           <div class="card-pad">${barList(models.map(([k, g]) => ({ label: `<span>${esc(k)}<em>${money(g.rev)}</em></span>`, value: g.n, display: `${g.n} order${g.n === 1 ? '' : 's'}` })), CHART.cs, 'No ClearSense orders in this period.')}</div></section>` : ''}
         ${st.biz !== 'cs' ? `<section class="card"><div class="card-head"><h2>${hchip('calc')}Donor calculators</h2><span class="meta">${esc(bizName('hack'))}</span></div>
@@ -1985,16 +1996,18 @@
         <div class="sset-body"><div class="shellgrid">${s.cs.colours.map((c) => `<div class="shell ${OT.stockState(c)}">
             <div class="sh-art">${controllerArt(c.swatch, c.name)}</div>
             <div class="sh-name"><b>${esc(c.name)}</b><span class="stk ${OT.stockState(c)}">${stockLabel(c)}</span></div>
+            <label class="costat">Cost per shell <span class="prefix"><input type="number" min="0" step="0.01" data-cost="colour:${c.id}" value="${esc(num(c.cost))}"></span></label>
             <div class="sh-ctl">${stepper('colour', c.id, c)}${c.stock != null ? `<label class="lowat">Warn at <input type="number" min="0" data-lowat="colour:${c.id}" value="${esc(c.lowAt != null ? c.lowAt : 2)}"></label>` : ''}</div>
           </div>`).join('')}</div></div>
       </section>
       <section class="card sset" style="margin-top:16px">
         <div class="sset-head"><h2>Other parts</h2><p>Anything else you keep in stock, like screws, screen protectors or batteries. Choose whether one is used automatically per order.</p></div>
         <div class="sset-body">
-          ${(s.parts || []).length ? `<table class="table parts"><thead><tr><th>Part</th><th>Used automatically</th><th>Stock</th><th>Warn at</th><th></th></tr></thead><tbody>
+          ${(s.parts || []).length ? `<table class="table parts"><thead><tr><th>Part</th><th>Used automatically</th><th>Cost each</th><th>Stock</th><th>Warn at</th><th></th></tr></thead><tbody>
             ${s.parts.map((x) => `<tr style="cursor:default" data-part="${x.id}">
               <td><input type="text" data-pf="name" value="${esc(x.name)}" aria-label="Part name"></td>
               <td><select data-pf="perOrder" aria-label="Used automatically"><option value="none" ${x.perOrder === 'none' || !x.perOrder ? 'selected' : ''}>No, adjust by hand</option><option value="cs" ${x.perOrder === 'cs' ? 'selected' : ''}>One per ${esc(bizName('cs'))} order</option><option value="hack" ${x.perOrder === 'hack' ? 'selected' : ''}>One per ${esc(bizName('hack'))} order</option></select></td>
+              <td><span class="prefix"><input type="number" min="0" step="0.01" class="cost-in" data-cost="part:${x.id}" value="${esc(num(x.cost))}" aria-label="Cost each"></span></td>
               <td>${stepper('part', x.id, x)}</td>
               <td>${x.stock != null ? `<input type="number" min="0" class="lowat-in" data-lowat="part:${x.id}" value="${esc(x.lowAt != null ? x.lowAt : 2)}" aria-label="Warn at">` : ''}</td>
               <td class="r"><button class="iconbtn" data-action="delPart" data-id="${x.id}" aria-label="Remove part">${icon('trash')}</button></td></tr>`).join('')}</tbody></table>` : '<div class="placeholder-note">No other parts yet.</div>'}
@@ -2003,6 +2016,7 @@
       </section>`;
     const find = (key) => { const [kind, id] = key.split(':'); return kind === 'colour' ? s.cs.colours.find((c) => c.id === id) : s.parts.find((p) => p.id === id); };
     $$('[data-stock]').forEach((el) => el.addEventListener('change', async () => { find(el.dataset.stock).stock = Math.round(num(el.value)); await persist('Stock updated'); renderStock(); }));
+    $$('[data-cost]').forEach((el) => el.addEventListener('change', async () => { find(el.dataset.cost).cost = Math.max(0, Math.round(num(el.value) * 100) / 100); await persist('Cost saved. New orders use it for profit.'); }));
     $$('[data-lowat]').forEach((el) => el.addEventListener('change', async () => { find(el.dataset.lowat).lowAt = Math.max(0, Math.round(num(el.value))); await persist('Warning level saved'); renderStock(); }));
     $$('[data-part]').forEach((row) => {
       const part = s.parts.find((p) => p.id === row.dataset.part);
@@ -2153,6 +2167,42 @@
   }
 
 
+  // ---------- Profit ----------
+  function profitRows(o) {
+    if (!OT.costsConfigured(S()) && o.costOverride == null) {
+      return `<dt>Profit</dt><dd><button class="linkbtn" data-nav="settings">Add your costs</button><span class="muted" style="font-weight:500">to see profit</span></dd>`;
+    }
+    const cost = OT.orderCost(S(), o), profit = num(o.price) - cost;
+    const margin = num(o.price) ? Math.round((profit / num(o.price)) * 100) : 0;
+    return `<dt>Cost</dt><dd class="num">${money(cost)}<button class="linkbtn" data-action="editCost">${o.costOverride != null ? 'Set by hand, change' : 'Change'}</button></dd>
+      <dt>Profit</dt><dd class="num"><span class="${profit >= 0 ? 'up' : 'down'}">${money(profit)}</span><span class="muted" style="font-weight:500">${margin}% margin</span></dd>`;
+  }
+
+  function editCost(o) {
+    const auto = (o.costs || OT.costBreakdown(S(), o));
+    modal(`<div class="m-body"><h2>Costs for ${esc(o.orderId)}</h2><p>Used to work out profit. Set your usual costs in Settings and on the Stock page.</p>
+      <ul class="costlist">${auto.map((x) => `<li><span>${esc(x.label)}</span><b class="num">${money(x.amount)}</b></li>`).join('') || '<li><span class="muted">No automatic costs for this order</span></li>'}
+        <li class="tot"><span>Automatic total</span><b class="num">${money(auto.reduce((t, x) => t + num(x.amount), 0))}</b></li></ul>
+      <label class="notify" style="margin-top:14px"><input type="checkbox" id="useOverride" ${o.costOverride != null ? 'checked' : ''}><div><b>Set the cost by hand</b><span>For orders that cost more or less than usual.</span></div></label>
+      <div class="field prefix" style="margin-top:10px"><input type="number" step="0.01" min="0" id="costIn" value="${esc(o.costOverride != null ? o.costOverride : auto.reduce((t, x) => t + num(x.amount), 0))}" aria-label="Cost"></div></div>
+      <div class="m-foot"><button class="btn ghost" data-close>Cancel</button><button class="btn dark" id="okBtn">Save</button></div>`, (m, close) => {
+      $('#okBtn', m).onclick = async () => {
+        if ($('#useOverride', m).checked) o.costOverride = Math.max(0, num($('#costIn', m).value));
+        else delete o.costOverride;
+        close();
+        await persist('Cost saved');
+        renderOrder();
+      };
+    }, o.business);
+  }
+
+  function profitLine(orders) {
+    if (!OT.costsConfigured(S())) return '';
+    const p = orders.reduce((t, o) => t + OT.profitOf(S(), o), 0);
+    return `<div class="t4-sub">${money(p)} profit</div>`;
+  }
+
+
   // ---------- Global events ----------
   async function handleAction(action, el) {
     const order = route.page === 'order' ? DB.orders.find((x) => x.id === route.id) : null;
@@ -2175,6 +2225,7 @@
       case 'editPayment': return order && editPayment(order);
       case 'editOrder': return order && go('edit', { id: order.id, biz: order.business });
       case 'markReceived': return order && markReceived(order);
+      case 'editCost': return order && editCost(order);
       case 'invoiceSave': return order && saveInvoice(order);
       case 'invoiceEmail': return order && emailInvoice(order);
       case 'showPending': listState[el.dataset.biz].tab = 'pending'; listState[el.dataset.biz].view = 'list'; return go(el.dataset.biz);

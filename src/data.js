@@ -80,7 +80,11 @@
       // Turnaround windows in days, counted from the day the item is received.
       turnaround: { expressMin: 2, expressMax: 5, standardMin: 14, standardMax: 35, hackMax: 14, dueSoonDays: 2 },
       // Extra parts tracked on the Stock page. stock null means not tracked.
-      parts: []
+      parts: [],
+      // Costs per order, used for profit. Shell and part costs live on the colours and parts.
+      costs: { postage: 0, csExtra: 0, hackExtra: 0, hackDonor: 0 },
+      goals: { monthly: 0 },
+      autoLockMinutes: 10
     };
   }
 
@@ -106,7 +110,10 @@
         discounts: Array.isArray(s.discounts) ? s.discounts : d.settings.discounts,
         invoice: { ...d.settings.invoice, ...(s.invoice || {}) },
         turnaround: { ...d.settings.turnaround, ...(s.turnaround || {}) },
-        parts: Array.isArray(s.parts) ? s.parts : []
+        parts: Array.isArray(s.parts) ? s.parts : [],
+        costs: { ...d.settings.costs, ...(s.costs || {}) },
+        goals: { ...d.settings.goals, ...(s.goals || {}) },
+        autoLockMinutes: s.autoLockMinutes != null ? s.autoLockMinutes : d.settings.autoLockMinutes
       }
     };
   }
@@ -410,6 +417,35 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
     return [...settings.cs.colours, ...(settings.parts || [])].filter((x) => ['low', 'out'].includes(stockState(x)));
   }
 
+  // ---------- Costs and profit ----------
+  // What an order costs you, from current Settings. Saved on the order when it is created
+  // (o.costs) so later price changes do not rewrite past profit.
+  function costBreakdown(settings, o) {
+    const c = settings.costs || {};
+    const lines = [];
+    if (o.business === 'cs') {
+      const col = settings.cs.colours.find((x) => x.id === o.colourId);
+      if (col && num(col.cost)) lines.push({ label: `${col.name} shell`, amount: num(col.cost) });
+      if (num(c.csExtra)) lines.push({ label: 'Other costs per order', amount: num(c.csExtra) });
+    } else {
+      if (num(c.hackDonor)) lines.push({ label: 'Calculator and parts', amount: num(c.hackDonor) });
+      if (num(c.hackExtra)) lines.push({ label: 'Other costs per order', amount: num(c.hackExtra) });
+    }
+    (settings.parts || []).filter((x) => x.perOrder === o.business && num(x.cost)).forEach((x) => lines.push({ label: x.name, amount: num(x.cost) }));
+    if (num(c.postage)) lines.push({ label: 'Postage', amount: num(c.postage) });
+    return lines;
+  }
+  function orderCost(settings, o) {
+    if (o.costOverride != null) return num(o.costOverride);
+    return (o.costs || costBreakdown(settings, o)).reduce((t, x) => t + num(x.amount), 0);
+  }
+  function costsConfigured(settings) {
+    const c = settings.costs || {};
+    return [c.postage, c.csExtra, c.hackExtra, c.hackDonor].some((v) => num(v) > 0)
+      || settings.cs.colours.some((x) => num(x.cost) > 0) || (settings.parts || []).some((x) => num(x.cost) > 0);
+  }
+  function profitOf(settings, o) { return num(o.price) - orderCost(settings, o); }
+
   // ---------- Invoices ----------
   function isFullyPaid(o) {
     const p = o.payment;
@@ -491,6 +527,7 @@ ${lines.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#7D7F88;bor
   }
 
   window.OT = {
+    costBreakdown, orderCost, costsConfigured, profitOf,
     turnaround, turnaroundWindow, shippedAt, takeStock, returnStock, stockState, lowStock, isFullyPaid, invoiceLines, invoiceNumber, invoiceHtml,
     customerOf, paymentSchedule, paymentText, STATUSES, CANCELLED, statusInfo, isOpen, phoneDigits, validatePhone, customerKey, uid, emptyDB, migrate, money, num, coloursFor, deliveryOptions, deliveryText,
     csPrice, parseGames, hackPrice, validateSerial, nextOrderId, statusLabel, orderLines,
