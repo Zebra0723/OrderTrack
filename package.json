@@ -32,7 +32,8 @@
       ]
     },
     "dmg": {
-      "title": "OrderTrack"
+      "title": "OrderTrack",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
   },
   "dependencies": {
