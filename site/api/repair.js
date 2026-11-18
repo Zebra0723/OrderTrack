@@ -3,6 +3,7 @@
 //
 // Email goes out through Resend (RESEND_API_KEY) if set, otherwise through SMTP
 // (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS), for example Gmail with an app password.
+// Port 465 uses TLS from the start; 587 (the default) upgrades with STARTTLS.
 // TICKET_TO sets where tickets go (default chameleon@dailyos.uk), MAIL_FROM the sender.
 import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
@@ -80,9 +81,9 @@ async function transport() {
     };
   }
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-    const port = Number(process.env.SMTP_PORT || 465);
+    const port = Number(process.env.SMTP_PORT || 587);
     const t = nodemailer.createTransport({
-      host: process.env.SMTP_HOST, port, secure: port === 465,
+      host: process.env.SMTP_HOST, port, secure: port === 465, requireTLS: port === 587,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
     });
     return { send: (m) => t.sendMail(m) };

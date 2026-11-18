@@ -13,7 +13,7 @@ Tickets go to `chameleon@dailyos.uk` (change with `TICKET_TO`), with a copy to t
 Set one of these in the Vercel project's Environment Variables:
 
 - SMTP, for example Gmail with an app password:
-  `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_USER=<the Gmail address>`, `SMTP_PASS=<the app password>`
+  `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587` (or 465), `SMTP_USER=<the Gmail address>`, `SMTP_PASS=<the app password>`
 - or Resend: `RESEND_API_KEY=<key>` and `MAIL_FROM=Chameleon Repairs <repairs@your-domain>`
 
 `MAIL_FROM` defaults to `Chameleon Repairs <SMTP_USER>`. Redeploy after changing variables.
