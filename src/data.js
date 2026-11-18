@@ -38,7 +38,7 @@
 
   function defaultSettings() {
     return {
-      businessNames: { cs: 'ClearSense', hack: 'Hackulator' },
+      businessNames: { cs: 'Chameleon', hack: 'Hackulator' },
       cs: {
         models: ['BDM-010', 'BDM-020', 'BDM-030', 'BDM-040', 'BDM-050'],
         colours: [
@@ -68,8 +68,8 @@
         includedGames: ['2048', 'Snake', 'Tetris']
       },
       email: {
-        host: '', port: 587, user: '', fromName: 'ClearSense and Hackulator', fromEmail: '',
-        signOff: 'Thanks,\nThe ClearSense and Hackulator team'
+        host: '', port: 587, user: '', fromName: 'Chameleon and Hackulator', fromEmail: '',
+        signOff: 'Thanks,\nThe Chameleon and Hackulator team'
       },
       discounts: [],
       invoice: {
@@ -110,6 +110,11 @@
         delete c.stock; delete c.lowAt; delete c.cost;
       }
     });
+    // ClearSense was renamed Chameleon: update the old name wherever it was saved.
+    const renamed = (v) => (typeof v === 'string' ? v.replace(/ClearSense/g, 'Chameleon') : v);
+    if (s.businessNames) s.businessNames.cs = renamed(s.businessNames.cs);
+    if (s.email) { s.email.fromName = renamed(s.email.fromName); s.email.signOff = renamed(s.email.signOff); }
+    if (s.invoice) for (const k of Object.keys(s.invoice)) s.invoice[k] = renamed(s.invoice[k]);
     const orders = Array.isArray(db.orders) ? db.orders : [];
     // Orders only carry their own CS/HC serial, never the serial printed on the
     // customer's controller (Comet used to pass that along).

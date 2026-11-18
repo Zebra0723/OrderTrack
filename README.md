@@ -1,6 +1,6 @@
 # OrderTrack
 
-A Mac app for managing orders for two businesses: **ClearSense** (custom PS5 controller housings) and **Hackulator** (calculators hacked to play games).
+A Mac app for managing orders for two businesses: **Chameleon** (custom PS5 controller housings) and **Hackulator** (calculators hacked to play games).
 
 ## Install or update on your Mac
 
@@ -16,9 +16,9 @@ The version number is shown at the bottom of the sidebar, so you can check you a
 
 ## Features
 
-- Switch between ClearSense and Hackulator orders, with open-order counts and status filters.
+- Switch between Chameleon and Hackulator orders, with open-order counts and status filters.
 - New order forms with validation: serial numbers must be exactly 10 characters and start with `CS` or `HC`. Order IDs and serial numbers must be unique.
-- ClearSense: the colour list depends on the BDM model, the delivery options depend on the colour, and the price fills in automatically.
+- Chameleon: the colour list depends on the BDM model, the delivery options depend on the colour, and the price fills in automatically.
 - Hackulator: base price covers the included games, and each extra game line adds the extra game price.
 - Find Order searches by serial number or order ID (Cmd+F). Cmd+N starts a new order.
 - Order view: full details and status changes (pending, confirmed, in progress, shipped, delivered), with an optional update email to the customer for each change.
@@ -33,7 +33,7 @@ The version number is shown at the bottom of the sidebar, so you can check you a
 - Invoices: download a PDF or email it to the customer as an attachment. Your address, payment instructions and footer are set in Settings, Invoices.
 - Turnaround tracking: mark when the controller or calculator arrives (or tick it when changing status) and each order gets a ship-by date, with due soon and overdue warnings. Windows are set in Settings, Turnaround.
 - Reports: revenue by month, average order, discounts, money to collect, on-time rate, top colours, models, donor calculators, extra games, payments, turnaround and top customers, filtered by period and business.
-- Stock: counts per ClearSense colour and for any extra parts, taken automatically when orders are created and returned when cancelled, with low stock warnings.
+- Stock: counts per Chameleon colour and for any extra parts, taken automatically when orders are created and returned when cancelled, with low stock warnings.
 - Coming up on Home: a 7-day strip and a two-week list of ship-by deadlines and finance payments due, plus orders still waiting for the controller or calculator to arrive, each with a one-click Arrived button.
 - Separate stock and costs for non express and express shells of each colour; orders take from the matching one.
 - Profit tracking: set a cost per shell (per colour and delivery type) and per part on the Stock page, plus postage and other per-order costs in Settings, Costs. Each order shows its cost, profit and margin (and you can set any order's cost by hand). Home shows profit this month and Reports shows profit, margin and profit per colour. Orders keep the costs from when they were created.

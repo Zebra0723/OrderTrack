@@ -693,7 +693,7 @@
     if (await persist(changed.length ? `${o.orderId} updated` : 'No changes to save')) go('order', { id: o.id, biz: o.business });
   }
 
-  // ---------- ClearSense form ----------
+  // ---------- Chameleon form ----------
   function renderCsForm(ed) {
     const s = S().cs;
     let initColour = ed ? ed.colourId : null;
@@ -2105,8 +2105,8 @@
     const turn = scope.map((o) => ({ o, t: OT.turnaround(S(), o) })).filter((x) => x.t && x.t.daysTaken != null);
     const avgOf = (arr) => (arr.length ? (arr.reduce((s, x) => s + x.t.daysTaken, 0) / arr.length) : null);
     const tGroups = [
-      ['ClearSense express', turn.filter((x) => x.o.business === 'cs' && x.o.delivery === 'express')],
-      ['ClearSense non express', turn.filter((x) => x.o.business === 'cs' && x.o.delivery !== 'express')],
+      ['Chameleon express', turn.filter((x) => x.o.business === 'cs' && x.o.delivery === 'express')],
+      ['Chameleon non express', turn.filter((x) => x.o.business === 'cs' && x.o.delivery !== 'express')],
       [bizName('hack'), turn.filter((x) => x.o.business === 'hack')]
     ].filter(([, a]) => a.length);
     const onTime = turn.filter((x) => x.t.state === 'on_time').length;
@@ -2133,9 +2133,9 @@
 
       <div class="home-grid two" style="margin-top:16px">
         ${st.biz !== 'hack' ? `<section class="card"><div class="card-head"><h2>${hchip('pad')}Top colours</h2><span class="meta">${esc(bizName('cs'))}</span></div>
-          <div class="card-pad">${barList(colours.map(([k, g]) => ({ label: `${swatch(swatchOf(g.o))}<span>${esc(k)}<em>${money(g.rev)}${OT.costsConfigured(S()) ? `, ${money(cs.filter((o) => o.colourName === k).reduce((t, o) => t + OT.profitOf(S(), o), 0))} profit` : ''}</em></span>`, value: g.n, display: `${g.n} order${g.n === 1 ? '' : 's'}` })), CHART.cs, 'No ClearSense orders in this period.')}</div></section>
+          <div class="card-pad">${barList(colours.map(([k, g]) => ({ label: `${swatch(swatchOf(g.o))}<span>${esc(k)}<em>${money(g.rev)}${OT.costsConfigured(S()) ? `, ${money(cs.filter((o) => o.colourName === k).reduce((t, o) => t + OT.profitOf(S(), o), 0))} profit` : ''}</em></span>`, value: g.n, display: `${g.n} order${g.n === 1 ? '' : 's'}` })), CHART.cs, 'No Chameleon orders in this period.')}</div></section>
         <section class="card"><div class="card-head"><h2>${hchip('pad')}BDM models</h2><span class="meta">${esc(bizName('cs'))}</span></div>
-          <div class="card-pad">${barList(models.map(([k, g]) => ({ label: `<span>${esc(k)}<em>${money(g.rev)}</em></span>`, value: g.n, display: `${g.n} order${g.n === 1 ? '' : 's'}` })), CHART.cs, 'No ClearSense orders in this period.')}</div></section>` : ''}
+          <div class="card-pad">${barList(models.map(([k, g]) => ({ label: `<span>${esc(k)}<em>${money(g.rev)}</em></span>`, value: g.n, display: `${g.n} order${g.n === 1 ? '' : 's'}` })), CHART.cs, 'No Chameleon orders in this period.')}</div></section>` : ''}
         ${st.biz !== 'cs' ? `<section class="card"><div class="card-head"><h2>${hchip('calc')}Donor calculators</h2><span class="meta">${esc(bizName('hack'))}</span></div>
           <div class="card-pad">${barList(donors.map(([k, g]) => ({ label: `<span>${esc(k)}<em>${money(g.rev)}</em></span>`, value: g.n, display: `${g.n} order${g.n === 1 ? '' : 's'}` })), CHART.hack, 'No Hackulator orders in this period.')}</div></section>
         <section class="card"><div class="card-head"><h2>${hchip('calc')}Most wanted extra games</h2><span class="meta">${esc(bizName('hack'))}</span></div>

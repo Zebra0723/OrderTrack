@@ -2,7 +2,7 @@
   "name": "ordertrack",
   "productName": "OrderTrack",
   "version": "1.0.0",
-  "description": "Order manager for ClearSense and Hackulator",
+  "description": "Order manager for Chameleon and Hackulator",
   "main": "main.js",
   "private": true,
   "scripts": {
