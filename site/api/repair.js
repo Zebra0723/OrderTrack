@@ -3,11 +3,12 @@
 //
 // Email goes out through Resend (RESEND_API_KEY) if set, otherwise through SMTP
 // (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS), for example Gmail with an app password.
-// TICKET_TO sets where tickets go (default clearsense@dailyos.uk), MAIL_FROM the sender.
+// TICKET_TO sets where tickets go (default chameleon@dailyos.uk), MAIL_FROM the sender.
 import crypto from 'node:crypto';
 import nodemailer from 'nodemailer';
+import { lookup } from './_lib/serials.js';
 
-const TO = process.env.TICKET_TO || 'clearsense@dailyos.uk';
+const TO = process.env.TICKET_TO || 'chameleon@dailyos.uk';
 const REASONS = ['Button not working', 'Trigger not working', 'Joystick not working', 'Broken parts', 'Touchpad malfunction', 'Other'];
 
 // A light per-instance limit; the honeypot and timing check catch most bots.
@@ -106,6 +107,12 @@ export default async function handler(req, res) {
   const { ticket, error } = validate(body);
   if (error) return res.status(400).json({ ok: false, error });
 
+  // Only serials from real orders, as sent by OrderTrack.
+  const order = await lookup(ticket.serial);
+  if (!order.ready) return res.status(503).json({ ok: false, error: `We can't check serial numbers right now. Please email ${TO} instead.` });
+  if (!order.found) return res.status(400).json({ ok: false, error: "We can't find an order with that serial number. Check your order confirmation." });
+  if (order.status === 'cancelled') return res.status(400).json({ ok: false, error: `That order was cancelled. Please email ${TO} if you need help.` });
+
   const mail = await transport();
   if (!mail) {
     console.error('repair: no email transport configured');
@@ -116,7 +123,8 @@ export default async function handler(req, res) {
   const from = process.env.MAIL_FROM || `Chameleon Repairs <${process.env.SMTP_USER || 'repairs@dailyos.uk'}>`;
   const reasonText = ticket.reason === 'Other' ? `Other: ${ticket.other}` : ticket.reason;
   const when = new Date().toLocaleString('en-GB', { timeZone: 'Europe/London', dateStyle: 'medium', timeStyle: 'short' });
-  const rows = [['Ticket', ref], ['Serial', ticket.serial], ['Name', ticket.name], ['Email', ticket.email], ['Reason', ticket.reason]];
+  const orderText = [order.model, order.colour].filter(Boolean).join(', ');
+  const rows = [['Ticket', ref], ['Serial', ticket.serial], ['Order', `${orderText}${order.statusText ? ` (${order.statusText})` : ''}`], ['Name', ticket.name], ['Email', ticket.email], ['Reason', ticket.reason]];
   if (ticket.other) rows.push(['Details', ticket.other]);
   rows.push(['Sent', when]);
 
@@ -139,7 +147,7 @@ export default async function handler(req, res) {
       from, to: ticket.email, replyTo: TO,
       subject: `Your Chameleon repair ticket ${ref}`,
       text: `Hi ${first},\n\nThanks for your repair request. We have it and will be in touch soon.\n\nTicket: ${ref}\nSerial: ${ticket.serial}\nReason: ${reasonText}\n\nReply to this email if you need to add anything.\n\nChameleon`,
-      html: emailHtml('Repair ticket received', `Hi ${esc(first)}, thanks for your repair request. We have it and will be in touch soon. Keep your ticket number handy.`, [['Ticket', ref], ['Serial', ticket.serial], ['Reason', reasonText]], 'Reply to this email if you need to add anything.')
+      html: emailHtml('Repair ticket received', `Hi ${esc(first)}, thanks for your repair request. We have it and will be in touch soon. Keep your ticket number handy.`, [['Ticket', ref], ['Serial', ticket.serial], ['Controller', orderText], ['Reason', reasonText]], 'Reply to this email if you need to add anything.')
     });
     confirmationSent = true;
   } catch (err) {

@@ -21,6 +21,9 @@
   ];
 
   const form = $('#repairForm');
+  // The order behind the serial, from OrderTrack: { serial, state: 'checking'|'found'|'missing'|'error', info }.
+  let order = { serial: '', state: '' };
+  let lookupTimer = null;
   const serial = $('#serial'), name = $('#name'), email = $('#email'), other = $('#other');
   const startedAt = Date.now();
   const refStart = () => `REPAIR TICKET · ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}`;
@@ -44,6 +47,13 @@
   }
   const nameOk = (v) => v.trim().length >= 2 && /\S+\s+\S+/.test(v.trim());
   const emailOk = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim());
+  function orderError() {
+    if (order.serial !== serial.value || order.state === 'checking') return 'Checking your serial number...';
+    if (order.state === 'missing') return "We can't find an order with that serial number. Check your order confirmation.";
+    if (order.state === 'cancelled') return 'That order was cancelled, so it cannot have a repair ticket.';
+    if (order.state === 'error') return order.message || "We can't check serial numbers right now. Please try again in a moment.";
+    return '';
+  }
   function reasonError() {
     const r = reasonValue();
     if (!r) return 'Please choose a reason.';
@@ -76,7 +86,11 @@
     count.classList.toggle('ok', !serialError(s));
     $('#otherCount').textContent = other.value.length;
 
-    const done = { serial: !serialError(s), name: nameOk(name.value), email: emailOk(email.value), reason: !reasonError() };
+    const tOrder = $('#tOrder');
+    const found = order.state === 'found' && order.serial === s;
+    tOrder.textContent = found ? [order.info.model, order.info.colour].filter(Boolean).join(' · ') : 'Found from your serial';
+    tOrder.classList.toggle('empty', !found);
+    const done = { serial: !serialError(s) && found, name: nameOk(name.value), email: emailOk(email.value), reason: !reasonError() };
     document.querySelectorAll('.progress i').forEach((i) => i.classList.toggle('done', done[i.dataset.step]));
     const ready = Object.values(done).every(Boolean);
     const st = $('#tStatus');
@@ -85,12 +99,64 @@
     $('#f-serial').classList.toggle('good', done.serial);
   }
 
+  // ---------- Look the serial up in OrderTrack's list ----------
+  const card = $('#orderCard');
+  const escH = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function showOrder() {
+    const s = serial.value;
+    if (serialError(s) || order.serial !== s || !order.state) { card.hidden = true; return; }
+    card.hidden = false;
+    if (order.state === 'checking') {
+      card.className = 'order-card checking';
+      card.innerHTML = '<span class="spin"></span>Looking up your order...';
+    } else if (order.state === 'found') {
+      const i = order.info;
+      const c = (window.CHAMELEON.colours || []).find((x) => x.name.toLowerCase() === String(i.colour).toLowerCase());
+      const pic = c && c.photo ? `<img src="${c.photo}?width=200" alt="">` : `<span class="dot" style="background:${c ? c.hex : 'var(--coral)'}"></span>`;
+      card.className = 'order-card';
+      card.innerHTML = `<div class="oc-img">${pic}</div><div><b>${escH([i.model, i.colour].filter(Boolean).join(' · ') || 'Chameleon order')}</b><span>${escH(i.statusText)}${i.ordered ? ` · ordered ${escH(i.ordered)}` : ''}</span></div><span class="oc-tag">Order found</span>`;
+    } else {
+      card.className = 'order-card missing';
+      card.innerHTML = `<i>!</i><div>${escH(orderError())}</div>`;
+    }
+  }
+  async function check(s) {
+    order = { serial: s, state: 'checking' };
+    showOrder(); paint();
+    try {
+      const res = await fetch('/api/serial?sn=' + encodeURIComponent(s));
+      const data = await res.json().catch(() => ({}));
+      if (serial.value !== s) return;
+      if (res.ok && data.ok) {
+        order = data.found
+          ? { serial: s, state: data.status === 'cancelled' ? 'cancelled' : 'found', info: data }
+          : { serial: s, state: 'missing' };
+      } else {
+        order = { serial: s, state: 'error', message: data.error };
+      }
+    } catch (e) {
+      if (serial.value !== s) return;
+      order = { serial: s, state: 'error' };
+    }
+    mark('#f-serial', false);
+    showOrder(); paint();
+  }
+  function maybeCheck() {
+    clearTimeout(lookupTimer);
+    const s = serial.value;
+    if (serialError(s)) { order = { serial: '', state: '' }; showOrder(); return; }
+    if (order.serial === s && order.state && order.state !== 'error') return;
+    lookupTimer = setTimeout(() => check(s), 250);
+  }
+
   // ---------- Inputs ----------
   serial.addEventListener('input', () => {
     const pos = serial.selectionStart;
-    serial.value = serial.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+    // Pasting a full serial after the CS we typed in for them should not double it.
+    serial.value = serial.value.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^CS(?=CS)/, '').slice(0, 10);
     try { serial.setSelectionRange(pos, pos); } catch (e) { /* not supported on this input */ }
     if ($('#f-serial').classList.contains('bad')) mark('#f-serial', serialError(serial.value), serialError(serial.value));
+    maybeCheck();
     changed();
   });
   serial.addEventListener('focus', () => { if (!serial.value) serial.value = 'CS'; paint(); });
@@ -134,6 +200,7 @@
   const fromLink = new URLSearchParams(location.search).get('sn');
   if (fromLink) serial.value = fromLink.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
   paint();
+  maybeCheck();
 
   // ---------- Submit ----------
   const alertBox = $('#formAlert');
@@ -142,7 +209,7 @@
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     showAlert('');
-    const se = serialError(serial.value);
+    const se = serialError(serial.value) || orderError();
     const checks = [
       ['#f-serial', se, se, serial],
       ['#f-name', !nameOk(name.value), 'Please enter your first and last name.', name],
@@ -207,6 +274,8 @@
   $('#againBtn').addEventListener('click', () => {
     form.reset();
     serial.value = '';
+    order = { serial: '', state: '' };
+    showOrder();
     $('#otherBox').classList.remove('show');
     $('#tRef').textContent = refStart();
     $('#done').classList.remove('show');

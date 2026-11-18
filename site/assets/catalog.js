@@ -1,7 +1,8 @@
 // What the site shows. Edit this file to change colours, models or wording.
 // early = BDM-010 and BDM-020; later = BDM-030, BDM-040 and BDM-050.
+// photo: eXtremeRate's own photo of the full shell set fitted on a controller; product: its eXtremeRate page.
 window.CHAMELEON = {
-  email: 'clearsense@dailyos.uk',
+  email: 'chameleon@dailyos.uk',
   fromPrice: 30,
   express: '2 to 5 days after we receive your controller',
   standard: '2 to 5 weeks after we receive your controller',
@@ -13,16 +14,38 @@ window.CHAMELEON = {
     { id: 'BDM-050', group: 'later', note: 'The newest DualSense revision.' }
   ],
   colours: [
-    { name: 'Clear', hex: '#E4EBEF', group: 'early', standard: true, express: false, blurb: 'See every part inside. The classic.' },
-    { name: 'Purple Tinted Clear', hex: '#CDB8E8', group: 'early', standard: true, express: false, blurb: 'Clear with a soft violet glow.' },
-    { name: 'Black', hex: '#1F1F23', group: 'later', standard: false, express: true, blurb: 'Deep, matte and understated.' },
-    { name: 'Scarlet', hex: '#C8102E', group: 'later', standard: false, express: true, blurb: 'Loud, glossy, unmistakable red.' },
-    { name: 'Grey with Black Buttons', hex: '#9C9CA3', group: 'later', standard: true, express: true, blurb: 'Retro grey with contrast buttons.' },
-    { name: 'Emerald Clear', hex: '#3FBF8A', group: 'later', standard: true, express: false, blurb: 'Clear green, like sea glass.' },
-    { name: 'Purple Clear', hex: '#9B6BD6', group: 'later', standard: true, express: false, blurb: 'A bold see-through purple.' },
-    { name: 'Black Clear', hex: '#55555C', group: 'later', standard: true, express: false, blurb: 'Smoked see-through black.' },
-    { name: 'Lime Green Clear', hex: '#A6DD2E', group: 'later', standard: true, express: true, blurb: 'Bright, zesty and clear.' },
-    { name: 'Dragon', hex: '#B8452A', group: 'later', standard: false, express: true, blurb: 'Scaled, fiery and full of texture.' },
-    { name: 'Anime', hex: '#F27AB0', group: 'later', standard: false, express: true, blurb: 'Halftone pink with sparkles.' }
+    { name: 'Clear', hex: '#E4EBEF', group: 'early', standard: true, express: false, blurb: 'See every part inside. The classic.' ,
+      photo: 'https://cdn.shopify.com/s/files/1/0633/0381/1322/files/eXtremeRateReplacementFullSetShellswithButtonsCompatiblewithPS5ControllerBDM-010-020-Clear-2.jpg',
+      product: 'https://extremerate.com/products/extremeratefull-set-housing-shell-with-buttons-touchpad-cover-clear-custom-replacement-decorative-trim-shell-front-back-plates-compatible-with-ps5-controller-bdm-010-bdm-020-controller-not-included-qpfm5001g2' },
+    { name: 'Purple Tinted Clear', hex: '#CDB8E8', group: 'early', standard: true, express: false, blurb: 'Clear with a soft violet glow.' ,
+      photo: 'https://cdn.shopify.com/s/files/1/0633/0381/1322/files/eXtremeRateReplacementFullSetShellswithButtonsCompatiblewithPS5ControllerBDM-010-020-ClearAtomicPurple-2.jpg',
+      product: 'https://extremerate.com/products/full-set-housing-shell-with-buttons-touchpad-cover-clear-atomic-purple-custom-replacement-decorative-trim-shell-front-back-plates-compatible-with-ps5-controller-bdm-010-bdm-020-controller-not-included-qpfm5005g2' },
+    { name: 'Black', hex: '#1F1F23', group: 'later', standard: false, express: true, blurb: 'Deep, matte and understated.' ,
+      photo: 'https://cdn.shopify.com/s/files/1/0633/0381/1322/files/eXtremeRateLUNARedesignedReplacementFullSetShellswithButtonsforPS5ControllerBDM-030-040-050-060-Black-1_6aeafe84-e7b5-4176-9bd5-02cc1eec0940.jpg',
+      product: 'https://extremerate.com/products/extremerate-luna-redesigned-replacement-full-set-shells-with-buttons-compatible-with-ps5-controller-bdm-030-040-050-060-black' },
+    { name: 'Scarlet', hex: '#C8102E', group: 'later', standard: false, express: true, blurb: 'Loud, glossy, unmistakable red.' ,
+      photo: 'https://cdn.shopify.com/s/files/1/0633/0381/1322/files/eXtremeRateLUNARedesignedReplacementFullSetShellswithButtonsforPS5ControllerBDM-030-040-050-060-ScarletRed-1.jpg',
+      product: 'https://extremerate.com/products/extremerate-luna-redesigned-replacement-full-set-shells-with-buttons-compatible-with-ps5-controller-bdm-030-040-050-060-scarlet-red' },
+    { name: 'Grey with Black Buttons', hex: '#9C9CA3', group: 'later', standard: true, express: true, blurb: 'Retro grey with contrast buttons.' ,
+      photo: 'https://cdn.shopify.com/s/files/1/0633/0381/1322/files/eXtremeRateLUNARedesignedReplacementFullSetShellswithButtonsforPS5ControllerBDM-030-040-050-060-NewHopeGray-1.jpg',
+      product: 'https://extremerate.com/products/extremerate-luna-redesigned-replacement-full-set-shells-with-buttons-compatible-with-ps5-controller-bdm-030-040-050-060-new-hope-gray' },
+    { name: 'Emerald Clear', hex: '#3FBF8A', group: 'later', standard: true, express: false, blurb: 'Clear green, like sea glass.' ,
+      photo: 'https://cdn.shopify.com/s/files/1/0633/0381/1322/files/eXtremeRateLUNARedesignedReplacementFullSetShellswithButtonsforPS5ControllerBDM-030-040-050-060-EmeraldGreen-1.jpg',
+      product: 'https://extremerate.com/products/extremerate-luna-redesigned-replacement-full-set-shells-with-buttons-compatible-with-ps5-controller-bdm-030-040-050-060-emerald-green' },
+    { name: 'Purple Clear', hex: '#9B6BD6', group: 'later', standard: true, express: false, blurb: 'A bold see-through purple.' ,
+      photo: 'https://cdn.shopify.com/s/files/1/0633/0381/1322/files/eXtremeRateReplacementFullSetShellswithButtonsforPS5ControllerBDM-030-040-050-060-ClearAtomicPurple-2.jpg',
+      product: 'https://extremerate.com/products/extremerate-replacement-full-set-shells-with-buttons-compatible-with-ps5-controller-bdm-030-040-050-060-clear-atomic-purple' },
+    { name: 'Black Clear', hex: '#55555C', group: 'later', standard: true, express: false, blurb: 'Smoked see-through black.' ,
+      photo: 'https://cdn.shopify.com/s/files/1/0633/0381/1322/files/eXtremeRate_Replacement_Full_Set_Shells_with_Buttons_Compatible_with_PS5_Controller_BDM-030_040_050_060_-_Clear_Black-2.jpg',
+      product: 'https://extremerate.com/products/extremerate-replacement-full-set-shells-with-buttons-compatible-with-ps5-controller-bdm-030-040-050-060-clear-black' },
+    { name: 'Lime Green Clear', hex: '#A6DD2E', group: 'later', standard: true, express: true, blurb: 'Bright, zesty and clear.' ,
+      photo: 'https://cdn.shopify.com/s/files/1/0633/0381/1322/files/eXtremeRateLUNARedesignedReplacementFullSetShellswithButtonsforPS5ControllerBDM-030-040-050-060-ClearLimeGreen-1.jpg',
+      product: 'https://extremerate.com/products/extremerate-luna-redesigned-replacement-full-set-shells-with-buttons-compatible-with-ps5-controller-bdm-030-040-050-060-clear-lime-green' },
+    { name: 'Dragon', hex: '#3E5C9A', group: 'later', standard: false, express: true, blurb: 'Porcelain Dragon: a blue and white dragon, like fine china.' ,
+      photo: 'https://cdn.shopify.com/s/files/1/0633/0381/1322/files/eXtremeRate_LUNA_Redesigned_Replacement_Full_Set_Shells_with_Buttons_for_PS5_Controller_BDM-030040050_-_Porcelain_Dragon-1.jpg',
+      product: 'https://extremerate.com/products/extremerate-luna-redesigned-replacement-full-set-shells-with-buttons-compatible-with-ps5-controller-bdm-030-040-050-porcelain-dragon' },
+    { name: 'Anime', hex: '#F27AB0', group: 'later', standard: false, express: true, blurb: 'Pastel anime art, cute and colourful.' ,
+      photo: 'https://cdn.shopify.com/s/files/1/0633/0381/1322/files/eXtremeRateLUNARedesignedReplacementFullSetShellswithButtonsforPS5Controller-MeWoow-1.jpg',
+      product: 'https://extremerate.com/products/extremerate-luna-redesigned-replacement-full-set-shells-with-buttons-compatible-with-ps5-controller-bdm-030-040-050-mewoow' }
   ]
 };

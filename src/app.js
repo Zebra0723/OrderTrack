@@ -1257,7 +1257,7 @@
 
   const SETTINGS_SECTIONS = [
     ['set-colours', 'Colours'], ['set-models', 'BDM models'], ['set-options', 'Options'], ['set-discounts', 'Discounts'], ['set-delivery', 'Delivery wording'],
-    ['set-hack', 'Hackulator'], ['set-comet', 'Comet (iMessage)'], ['set-costs', 'Costs'], ['set-invoice', 'Invoices'], ['set-turn', 'Turnaround'], ['set-email', 'Email'], ['set-general', 'Business names'], ['set-pass', 'Passcode'], ['set-data', 'Data and backup']
+    ['set-hack', 'Hackulator'], ['set-comet', 'Comet (iMessage)'], ['set-web', 'Website'], ['set-costs', 'Costs'], ['set-invoice', 'Invoices'], ['set-turn', 'Turnaround'], ['set-email', 'Email'], ['set-general', 'Business names'], ['set-pass', 'Passcode'], ['set-data', 'Data and backup']
   ];
 
   async function renderSettings() {
@@ -1322,6 +1322,14 @@
             </div>
             <div class="callout" style="margin-top:14px">${icon('info')}<div>OrderTrack must be open for Comet to create orders. Closing the window keeps it running; quitting with Cmd+Q stops it, and Comet will hold new orders until it is back.</div></div>`)}
 
+          ${sset('set-web', 'Chameleon website', 'Sends your website the serial numbers of your Chameleon orders, so its repair form only accepts real ones and can show the model, colour and status. Only those are sent: no names, contact details or prices. It updates a few seconds after any change, while OrderTrack is open.', `
+            <div class="comet-row">${sw('data-web="enabled"', s.website.enabled, 'Send serials to the website')}<span class="comet-status" id="webStatus">Checking...</span></div>
+            <div class="grid" style="margin-top:14px">
+              <div class="field"><label>Website address</label><input type="url" data-set="website.url" value="${esc(s.website.url || '')}" placeholder="https://..."></div>
+              <div class="field"><label>Sync key</label><div style="display:flex;gap:8px"><input type="text" readonly class="mono" id="webKey" value="${esc(s.website.key || '')}" placeholder="Turn it on to create a key"><button class="btn" data-action="copyWebKey">Copy</button></div>
+                <div class="hint">Add this in Vercel as the SYNC_TOKEN environment variable, then redeploy. <button class="linkbtn" data-action="syncWebNow">Send now</button></div></div>
+            </div>`)}
+
           ${sset('set-costs', 'Costs and profit', 'What each order costs you, used to show profit on orders, Home and Reports. Shell and part costs are set on the Stock page. Each order keeps the costs from when it was created, and you can change any order by hand.', `<div class="grid">
             <div class="field"><label>Postage per order</label><div class="prefix"><input type="number" step="0.01" min="0" data-set="costs.postage" data-num value="${esc(s.costs.postage)}"></div></div>
             <div class="field"><label>${esc(bizName('cs'))}, other costs per order</label><div class="prefix"><input type="number" step="0.01" min="0" data-set="costs.csExtra" data-num value="${esc(s.costs.csExtra)}"></div><div class="hint">For example packaging or buttons. The shell cost comes from Stock.</div></div>
@@ -1369,6 +1377,16 @@
         </div>
       </div>`;
 
+    const webToggle = $('[data-web="enabled"]', main);
+    if (webToggle) {
+      webToggle.addEventListener('change', async () => {
+        s.website.enabled = webToggle.checked;
+        if (s.website.enabled && !s.website.key) s.website.key = newToken();
+        await persist(s.website.enabled ? 'Website sync on' : 'Website sync off');
+        reRender();
+      });
+      showWebStatus();
+    }
     const cometToggle = $('[data-comet="enabled"]', main);
     if (cometToggle) {
       cometToggle.addEventListener('change', async () => {
@@ -1527,6 +1545,20 @@
         const res = await api.sendEmail(s.email, { to, subject: 'OrderTrack test email', text: 'Email sending from OrderTrack is working.', html: '<p>Email sending from OrderTrack is working.</p>' });
         el.disabled = false;
         return res.ok ? toast(`Test email sent to ${to}`) : toast('Email failed: ' + res.error, true);
+      }
+      case 'copyWebKey': {
+        const t = $('#webKey');
+        if (!t.value) return toast('Turn website sync on first to create a key', true);
+        try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); }
+        return toast('Sync key copied');
+      }
+      case 'syncWebNow': {
+        if (!api.websiteSync) return toast('Only available in the Mac app', true);
+        if (!S().website.enabled) return toast('Turn website sync on first', true);
+        const st = $('#webStatus'); if (st) st.textContent = 'Sending...';
+        const r = await api.websiteSync(DB);
+        showWebStatus();
+        return r.ok ? toast(`Sent ${r.count} serial${r.count === 1 ? '' : 's'} to the website`) : toast('Website sync failed: ' + r.error, true);
       }
       case 'copyCometToken': {
         const t = $('#cometToken');
@@ -2515,6 +2547,16 @@
       try { result = await apiCreateOrder(payload); } catch (e) { result = { ok: false, error: e.message }; }
       api.apiRespond(reqId, result);
     });
+  }
+
+  async function showWebStatus() {
+    const st = $('#webStatus');
+    if (!st) return;
+    if (!api.websiteStatus) { st.textContent = 'Only available in the Mac app'; return; }
+    const r = await api.websiteStatus();
+    const on = S().website && S().website.enabled;
+    st.className = 'comet-status ' + (r.ok ? 'on' : r.ok === false && on ? 'bad' : '');
+    st.textContent = !on ? 'Off' : r.ok ? `Sent ${r.count} serial${r.count === 1 ? '' : 's'} at ${new Date(r.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : r.ok === false ? `Not sent: ${r.error}` : 'Waiting for the next change';
   }
 
   function newToken() {

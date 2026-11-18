@@ -81,16 +81,33 @@
   // ---------- Colour studio ----------
   const view = $('#studioView');
   const studio = window.Pad.create('studio-pad');
+  // eXtremeRate's own photo of the shell fitted on a controller, with the drawing as a fallback.
+  const photo = document.createElement('figure');
+  photo.className = 'photo';
+  photo.innerHTML = '<img alt="" decoding="async"><figcaption><a target="_blank" rel="noopener">Photo: eXtremeRate</a></figcaption>';
+  const img = photo.querySelector('img');
+  view.insertBefore(photo, view.firstChild);
   view.insertBefore(studio.el, view.firstChild);
+  img.addEventListener('load', () => { photo.classList.add('loaded'); studio.el.hidden = true; photo.hidden = false; });
+  img.addEventListener('error', () => { photo.hidden = true; studio.el.hidden = false; });
   const swatches = $('#swatches');
   swatches.innerHTML = C.colours.map((c, i) => `
     <button class="swatch" type="button" aria-pressed="false" data-i="${i}" data-group="${c.group}">
-      <span class="sw ${c.name.toLowerCase().includes('clear') ? 'clear' : ''}" style="background:${c.hex}"></span>
-      <span><b>${esc(c.name)}</b><small>${c.group === 'early' ? 'BDM-010 / 020' : 'BDM-030 / 040 / 050'}</small></span>
+      <span class="sw ${c.name.toLowerCase().includes('clear') ? 'clear' : ''} ${c.photo ? 'has-photo' : ''}" style="background:${c.hex}">${c.photo ? `<img src="${c.photo}?width=160" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : ''}</span>
+      <span><b>${esc(c.name)}</b><small>${c.group === 'early' ? 'BDM-010 and 020' : 'BDM-030 to 050'}</small></span>
     </button>`).join('');
   function pick(i) {
     const c = C.colours[i];
     studio.set(c);
+    if (c.photo) {
+      photo.hidden = false; studio.el.hidden = true;
+      photo.classList.remove('loaded');
+      img.alt = `${c.name} shell fitted on a PS5 controller`;
+      img.src = `${c.photo}?width=900`;
+      photo.querySelector('a').href = c.product || 'https://extremerate.com';
+    } else {
+      photo.hidden = true; studio.el.hidden = false;
+    }
     view.style.setProperty('--glow', c.hex);
     $('#studioName').textContent = c.name;
     $('#studioBlurb').textContent = c.blurb;

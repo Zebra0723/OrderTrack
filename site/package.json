@@ -4,8 +4,11 @@
   "version": "1.0.0",
   "description": "Chameleon public website: overview and repair tickets",
   "type": "module",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
+    "@vercel/blob": "^0.27.3",
     "nodemailer": "^6.9.16"
   }
 }

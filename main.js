@@ -3,6 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const nodemailer = require('nodemailer');
 const { CometApi } = require('./comet-api');
+const { WebsiteSync } = require('./website-sync');
+const websiteSync = new WebsiteSync();
 
 let mainWin = null;
 let quitting = false;
@@ -47,7 +49,9 @@ function createWindow() {
 // ---------- Data ----------
 ipcMain.handle('data:load', () => {
   try {
-    return JSON.parse(fs.readFileSync(dataFile(), 'utf8'));
+    const data = JSON.parse(fs.readFileSync(dataFile(), 'utf8'));
+    websiteSync.update(data);
+    return data;
   } catch (err) {
     if (err.code === 'ENOENT') return null;
     // Main file unreadable: fall back to the last good copy.
@@ -63,8 +67,13 @@ ipcMain.handle('data:save', (_e, data) => {
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
   fs.renameSync(tmp, file);
   cometApi.update(data);
+  websiteSync.update(data);
   return true;
 });
+
+// ---------- Chameleon website (serials for the repair form) ----------
+ipcMain.handle('website:status', () => websiteSync.state);
+ipcMain.handle('website:sync', async (_e, data) => { if (data) websiteSync.data = data; return websiteSync.send(true); });
 
 // ---------- Comet (iMessage orders) ----------
 ipcMain.handle('api:respond', (_e, { reqId, result }) => { cometApi.respond(reqId, result); return true; });

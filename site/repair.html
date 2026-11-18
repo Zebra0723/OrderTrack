@@ -50,10 +50,11 @@
           <div class="field" id="f-serial">
             <label for="serial">Serial number <small>On your order, starts with CS</small></label>
             <div class="serial-box">
-              <input class="input" id="serial" name="serial" maxlength="10" autocomplete="off" spellcheck="false" inputmode="text" placeholder="CS" aria-describedby="serialHint serialErr" required>
+              <input class="input" id="serial" name="serial" autocomplete="off" spellcheck="false" inputmode="text" placeholder="CS" aria-describedby="serialHint serialErr" required>
               <span class="serial-count" id="serialCount">0/10</span>
             </div>
             <span class="hint" id="serialHint">10 characters, starting with CS. This is our serial, not the one printed on the controller.</span>
+            <div class="order-card" id="orderCard" aria-live="polite" hidden></div>
             <span class="err" id="serialErr"></span>
           </div>
 
@@ -117,6 +118,7 @@
           </div>
           <div class="ticket-body">
             <div class="t-row"><span>Serial</span><b class="mono empty" id="tSerial">CS________</b></div>
+            <div class="t-row"><span>Controller</span><b class="empty" id="tOrder">Found from your serial</b></div>
             <div class="t-row"><span>Name</span><b class="empty" id="tName">Your name</b></div>
             <div class="t-row"><span>Reason</span><b class="empty" id="tReason">Not chosen yet</b></div>
           </div>

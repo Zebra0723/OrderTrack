@@ -197,6 +197,13 @@ em.ital { font-style: italic; font-weight: 500; }
   transition: background .8s var(--ease); pointer-events: none;
 }
 .studio-view .pad { position: relative; margin: 10px auto 18px; width: 100%; }
+.studio-view .photo { position: relative; margin: 0 0 18px; aspect-ratio: 1 / 1; border-radius: 20px; background: #fff; overflow: hidden; display: grid; place-items: center; }
+.studio-view .photo img { width: 100%; height: 100%; object-fit: contain; opacity: 0; transform: scale(.97); transition: opacity .45s var(--ease), transform .6s var(--ease); }
+.studio-view .photo.loaded img { opacity: 1; transform: none; }
+.studio-view .photo::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--line); pointer-events: none; }
+.studio-view .photo figcaption { position: absolute; right: 10px; bottom: 10px; font-size: 11.5px; }
+.studio-view .photo figcaption a { color: var(--ink-3); text-decoration: none; background: rgba(255,255,255,.85); padding: 3px 8px; border-radius: 99px; }
+.studio-view .photo figcaption a:hover { color: var(--ink); }
 .studio-info { position: relative; display: grid; gap: 10px; }
 .studio-info h3 { font-size: 30px; display: flex; align-items: center; gap: 12px; }
 .studio-info p { color: var(--ink-2); }
@@ -218,6 +225,9 @@ em.ital { font-style: italic; font-weight: 500; }
 .swatch:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 .swatch[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 3px var(--coral-100); }
 .swatch .sw { width: 34px; height: 34px; border-radius: 10px; flex: none; box-shadow: inset 0 0 0 1px rgba(26, 29, 41, .14); position: relative; overflow: hidden; }
+.swatch .sw.has-photo { width: 52px; height: 52px; background: #fff !important; }
+.swatch .sw img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.35); }
+.swatch .sw.has-photo.clear::after { display: none; }
 .swatch .sw.clear::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255,255,255,.55) 0 4px, transparent 4px 8px); }
 .swatch b { display: block; font-size: 14px; line-height: 1.25; }
 .swatch small { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
@@ -344,6 +354,19 @@ em.ital { font-style: italic; font-weight: 500; }
 .serial-box .input { font-family: ui-monospace, 'SF Mono', Menlo, monospace; letter-spacing: .18em; text-transform: uppercase; font-size: 18px; padding-right: 76px; }
 .serial-count { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 12.5px; font-weight: 600; padding: 4px 9px; border-radius: 99px; background: var(--sunken); color: var(--ink-3); transition: background .2s, color .2s; }
 .serial-count.ok { background: var(--green-50); color: var(--green); }
+.order-card { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface-warm); animation: rise .35s var(--ease); }
+.order-card[hidden] { display: none; }
+.order-card .oc-img { width: 64px; height: 64px; border-radius: 12px; background: #fff; flex: none; overflow: hidden; display: grid; place-items: center; box-shadow: inset 0 0 0 1px var(--line); }
+.order-card .oc-img img { width: 100%; height: 100%; object-fit: contain; }
+.order-card .oc-img .dot { width: 28px; height: 28px; }
+.order-card b { display: block; font-size: 15.5px; }
+.order-card span { color: var(--ink-2); font-size: 13.5px; }
+.order-card .oc-tag { margin-left: auto; align-self: flex-start; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: var(--green-50); color: var(--green); white-space: nowrap; }
+.order-card.checking { color: var(--ink-3); font-size: 14px; }
+.order-card.checking .spin { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--line-strong); border-top-color: var(--coral); animation: spin .8s linear infinite; }
+.order-card.missing { border-color: #F3C2C2; background: #FDF3F3; color: #8A1C1C; font-size: 14.5px; font-weight: 500; }
+.order-card.missing i { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: #FBE3E3; flex: none; font-style: normal; font-weight: 700; }
+
 
 .reasons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; border-radius: 16px; }
 .reason { position: relative; }

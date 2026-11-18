@@ -17,5 +17,7 @@ contextBridge.exposeInMainWorld('api', {
   onApiCreateOrder: (fn) => ipcRenderer.on('api:createOrder', (_e, msg) => fn(msg)),
   onApiOutreachUpdate: (fn) => ipcRenderer.on('api:outreachUpdate', (_e, msg) => fn(msg)),
   apiRespond: (reqId, result) => ipcRenderer.invoke('api:respond', { reqId, result }),
-  cometStatus: () => ipcRenderer.invoke('comet:status')
+  cometStatus: () => ipcRenderer.invoke('comet:status'),
+  websiteStatus: () => ipcRenderer.invoke('website:status'),
+  websiteSync: (data) => ipcRenderer.invoke('website:sync', data)
 });

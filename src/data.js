@@ -86,6 +86,8 @@
       goals: { monthly: 0 },
       // Comet, the iMessage assistant, creates orders through a local API.
       comet: { enabled: false, token: '', port: 8790 },
+      // The Chameleon website: gets the list of order serials for its repair form.
+      website: { enabled: false, url: 'https://chameleon-tau-eight.vercel.app', key: '' },
       autoLockMinutes: 10
     };
   }
@@ -143,6 +145,7 @@
         costs: { ...d.settings.costs, ...(s.costs || {}) },
         goals: { ...d.settings.goals, ...(s.goals || {}) },
         comet: { ...d.settings.comet, ...(s.comet || {}) },
+        website: { ...d.settings.website, ...(s.website || {}) },
         autoLockMinutes: s.autoLockMinutes != null ? s.autoLockMinutes : d.settings.autoLockMinutes
       }
     };
