@@ -87,7 +87,7 @@
       // Comet, the iMessage assistant, creates orders through a local API.
       comet: { enabled: false, token: '', port: 8790 },
       // The Chameleon website: gets the list of order serials for its repair form.
-      website: { enabled: false, url: 'https://chameleon-tau-eight.vercel.app', key: '' },
+      website: { enabled: false, url: 'https://chameleon.dailyos.uk', key: '' },
       autoLockMinutes: 10
     };
   }
@@ -112,6 +112,7 @@
         delete c.stock; delete c.lowAt; delete c.cost;
       }
     });
+    if (s.website && /chameleon-tau-eight\.vercel\.app/.test(s.website.url || '')) s.website.url = 'https://chameleon.dailyos.uk';
     // ClearSense was renamed Chameleon: update the old name wherever it was saved.
     const renamed = (v) => (typeof v === 'string' ? v.replace(/ClearSense/g, 'Chameleon') : v);
     if (s.businessNames) s.businessNames.cs = renamed(s.businessNames.cs);
