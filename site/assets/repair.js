@@ -112,7 +112,7 @@
     } else if (order.state === 'found') {
       const i = order.info;
       const c = (window.CHAMELEON.colours || []).find((x) => x.name.toLowerCase() === String(i.colour).toLowerCase());
-      const pic = c && c.photo ? `<img src="${c.photo}?width=200" alt="">` : `<span class="dot" style="background:${c ? c.hex : 'var(--coral)'}"></span>`;
+      const pic = c && c.thumb ? `<img src="${c.thumb}" alt="">` : `<span class="dot" style="background:${c ? c.hex : 'var(--coral)'}"></span>`;
       card.className = 'order-card';
       card.innerHTML = `<div class="oc-img">${pic}</div><div><b>${escH([i.model, i.colour].filter(Boolean).join(' · ') || 'Chameleon order')}</b><span>${escH(i.statusText)}${i.ordered ? ` · ordered ${escH(i.ordered)}` : ''}</span></div><span class="oc-tag">Order found</span>`;
     } else {

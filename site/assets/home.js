@@ -15,14 +15,19 @@
 
   // ---------- Hero: the controller changes colour, like a chameleon ----------
   const stage = $('#heroStage');
-  const hero = window.Pad.create('hero-pad');
-  stage.insertBefore(hero.el, stage.querySelector('.hero-name'));
   const order = ['Scarlet', 'Emerald Clear', 'Anime', 'Purple Clear', 'Lime Green Clear', 'Dragon', 'Clear', 'Black'];
   const cycle = order.map((n) => C.colours.find((c) => c.name === n)).filter(Boolean);
+  // eXtremeRate's photos of each full shell set, cross-fading like a chameleon changing colour.
+  const hero = { el: document.createElement('div') };
+  hero.el.className = 'hero-photos';
+  hero.el.innerHTML = cycle.map((c, i) => `<img src="${c.photo}" alt="${i === 0 ? `${c.name} shell set fitted on a PS5 controller` : ''}" ${i === 0 ? 'fetchpriority="high"' : ''} decoding="async" data-i="${i}">`).join('');
+  stage.insertBefore(hero.el, stage.querySelector('.hero-name'));
+  const heroImgs = [...hero.el.querySelectorAll('img')];
   let hi = 0;
   let paused = false;
   function showHero(c) {
-    hero.set(c);
+    const at = cycle.indexOf(c);
+    heroImgs.forEach((im, i) => { im.classList.toggle('on', i === at); im.alt = i === at ? `${c.name} shell set fitted on a PS5 controller` : ''; });
     const accent = accentFor(c.hex);
     $('.hero').style.setProperty('--glow', accent);
     stage.style.setProperty('--glow', c.hex);
@@ -41,7 +46,7 @@
       const r = stage.getBoundingClientRect();
       const x = (e.clientX - r.left) / r.width - 0.5;
       const y = (e.clientY - r.top) / r.height - 0.5;
-      hero.el.style.transform = `perspective(900px) rotateY(${x * 16}deg) rotateX(${-y * 12}deg) translateY(${y * -6}px)`;
+      hero.el.style.transform = `perspective(900px) rotateY(${x * 8}deg) rotateX(${-y * 6}deg) translateY(${y * -6}px)`;
     });
     stage.addEventListener('pointerleave', () => (hero.el.style.transform = ''));
   }
@@ -84,7 +89,7 @@
   // eXtremeRate's own photo of the shell fitted on a controller, with the drawing as a fallback.
   const photo = document.createElement('figure');
   photo.className = 'photo';
-  photo.innerHTML = '<img alt="" decoding="async"><figcaption><a target="_blank" rel="noopener">Photo: eXtremeRate</a></figcaption>';
+  photo.innerHTML = '<img alt="" decoding="async"><figcaption><a target="_blank" rel="noopener">eXtremeRate shell set</a></figcaption>';
   const img = photo.querySelector('img');
   view.insertBefore(photo, view.firstChild);
   view.insertBefore(studio.el, view.firstChild);
@@ -93,7 +98,7 @@
   const swatches = $('#swatches');
   swatches.innerHTML = C.colours.map((c, i) => `
     <button class="swatch" type="button" aria-pressed="false" data-i="${i}" data-group="${c.group}">
-      <span class="sw ${c.name.toLowerCase().includes('clear') ? 'clear' : ''} ${c.photo ? 'has-photo' : ''}" style="background:${c.hex}">${c.photo ? `<img src="${c.photo}?width=160" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : ''}</span>
+      <span class="sw ${c.name.toLowerCase().includes('clear') ? 'clear' : ''} ${c.photo ? 'has-photo' : ''}" style="background:${c.hex}">${c.thumb ? `<img src="${c.thumb}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : ''}</span>
       <span><b>${esc(c.name)}</b><small>${c.group === 'early' ? 'BDM-010 and 020' : 'BDM-030 to 050'}</small></span>
     </button>`).join('');
   function pick(i) {
@@ -103,7 +108,7 @@
       photo.hidden = false; studio.el.hidden = true;
       photo.classList.remove('loaded');
       img.alt = `${c.name} shell fitted on a PS5 controller`;
-      img.src = `${c.photo}?width=900`;
+      img.src = c.photo;
       photo.querySelector('a').href = c.product || 'https://extremerate.com';
     } else {
       photo.hidden = true; studio.el.hidden = false;
