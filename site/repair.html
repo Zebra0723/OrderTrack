@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Repairs · Chameleon</title>
+  <meta name="description" content="Something wrong with a controller we fitted? Open a Chameleon repair ticket with your CS serial number.">
+  <meta name="theme-color" content="#FAF6EF">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <a class="sr" href="#main">Skip to content</a>
+
+  <header class="site-head">
+    <div class="wrap head-in">
+      <a class="brand" href="/" aria-label="Chameleon home">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#1A1D29"/><path id="brandTail" d="M32 14c10 0 18 8 18 18s-8 18-18 18c-7 0-12-5-12-12 0-5 4-9 9-9 4 0 7 3 7 7 0 3-2 5-5 5" fill="none" stroke="#FF6B5A" stroke-width="5" stroke-linecap="round"/></svg>
+        Chameleon
+      </a>
+      <button class="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="nav"><span></span><span></span><span></span></button>
+      <nav class="nav" id="nav" aria-label="Main">
+        <a href="/#colours">Colours</a>
+        <a href="/#models">Find your model</a>
+        <a href="/#how">How it works</a>
+        <a href="/#faq">FAQ</a>
+        <a class="btn btn-primary" href="/repair" aria-current="page">Repairs</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="wrap">
+        <span class="eyebrow">Repairs</span>
+        <h1>Let’s get it <em class="ital">fixed.</em></h1>
+        <p class="lede">Tell us what is wrong with a controller we fitted. Your ticket comes straight to us, and you get a ticket number and an email copy to keep.</p>
+      </div>
+    </section>
+
+    <div class="wrap repair-grid">
+      <div class="card">
+        <form class="form-card" id="repairForm" novalidate>
+          <div class="progress" aria-hidden="true"><i data-step="serial"></i><i data-step="name"></i><i data-step="email"></i><i data-step="reason"></i></div>
+          <div class="form-alert" id="formAlert" role="alert"></div>
+
+          <div class="field" id="f-serial">
+            <label for="serial">Serial number <small>On your order, starts with CS</small></label>
+            <div class="serial-box">
+              <input class="input" id="serial" name="serial" maxlength="10" autocomplete="off" spellcheck="false" inputmode="text" placeholder="CS" aria-describedby="serialHint serialErr" required>
+              <span class="serial-count" id="serialCount">0/10</span>
+            </div>
+            <span class="hint" id="serialHint">10 characters, starting with CS. This is our serial, not the one printed on the controller.</span>
+            <span class="err" id="serialErr"></span>
+          </div>
+
+          <div class="field" id="f-name">
+            <label for="name">Full name</label>
+            <input class="input" id="name" name="name" autocomplete="name" maxlength="120" placeholder="First and last name" aria-describedby="nameErr" required>
+            <span class="err" id="nameErr">Please enter your full name.</span>
+          </div>
+
+          <div class="field" id="f-email">
+            <label for="email">Email <small>So we can reply about your repair</small></label>
+            <input class="input" id="email" name="email" type="email" autocomplete="email" maxlength="200" placeholder="you@example.com" aria-describedby="emailErr" required>
+            <span class="err" id="emailErr">Please enter a valid email address.</span>
+          </div>
+
+          <div class="field" id="f-reason">
+            <span class="label" id="reasonLabel">Reason for repair</span>
+            <div class="reasons" role="radiogroup" aria-labelledby="reasonLabel" aria-describedby="reasonErr" id="reasons"></div>
+            <div class="other-box" id="otherBox">
+              <div>
+                <label for="other" class="sr">Describe the problem</label>
+                <textarea class="textarea" id="other" name="other" maxlength="1000" placeholder="Tell us what is happening. When did it start? Does anything make it better or worse?" aria-describedby="otherErr"></textarea>
+                <div class="counter"><span id="otherCount">0</span>/1000</div>
+              </div>
+            </div>
+            <span class="err" id="reasonErr">Please choose a reason.</span>
+          </div>
+
+          <div class="hp" aria-hidden="true">
+            <label for="website">Leave this empty</label>
+            <input id="website" name="website" tabindex="-1" autocomplete="off">
+          </div>
+
+          <div class="submit-row">
+            <button class="btn btn-coral" id="submitBtn" type="submit"><span class="spinner"></span><span id="submitText">Submit repair ticket</span></button>
+            <p>Your details are only used to handle this repair. We save your progress on this device until you send it.</p>
+          </div>
+        </form>
+
+        <div class="done" id="done" aria-live="polite">
+          <div class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+          <h2>Ticket sent.</h2>
+          <p class="lede">Thanks, <span id="doneName"></span>. We have your repair request and will be in touch soon.<span id="doneCopy"> A copy is on its way to <b id="doneEmail"></b>.</span></p>
+          <div class="refbox"><span id="doneRef"></span><button class="btn btn-ghost" type="button" id="copyRef">Copy</button></div>
+          <div class="done-actions">
+            <button class="btn btn-ghost" type="button" id="printBtn">Print ticket</button>
+            <button class="btn btn-ghost" type="button" id="againBtn">Open another ticket</button>
+            <a class="btn btn-primary" href="/">Back to home</a>
+          </div>
+        </div>
+      </div>
+
+      <aside class="ticket-col" aria-label="Your ticket">
+        <div class="ticket" id="ticket">
+          <div class="ticket-top">
+            <div class="row">
+              <span class="brand"><svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#2E3346"/><path d="M32 14c10 0 18 8 18 18s-8 18-18 18c-7 0-12-5-12-12 0-5 4-9 9-9 4 0 7 3 7 7 0 3-2 5-5 5" fill="none" stroke="#FF6B5A" stroke-width="5" stroke-linecap="round"/></svg>Chameleon</span>
+              <span class="ticket-status" id="tStatus">Draft</span>
+            </div>
+            <div class="ticket-ref" id="tRef">REPAIR TICKET · <span id="tDate"></span></div>
+          </div>
+          <div class="ticket-body">
+            <div class="t-row"><span>Serial</span><b class="mono empty" id="tSerial">CS________</b></div>
+            <div class="t-row"><span>Name</span><b class="empty" id="tName">Your name</b></div>
+            <div class="t-row"><span>Reason</span><b class="empty" id="tReason">Not chosen yet</b></div>
+          </div>
+          <div class="perf"></div>
+          <div class="ticket-foot"><div class="barcode" aria-hidden="true"></div><small>Sent to the<br>Chameleon team</small></div>
+        </div>
+        <div class="card tips">
+          <h3>Before you send</h3>
+          <ul>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Your CS serial is on your order confirmation and invoice.</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Fully charge the controller and try it again once.</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Keep hold of the controller until we reply.</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap">
+      <div class="foot-grid">
+        <div>
+          <a class="brand" href="/"><svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#2E3346"/><path d="M32 14c10 0 18 8 18 18s-8 18-18 18c-7 0-12-5-12-12 0-5 4-9 9-9 4 0 7 3 7 7 0 3-2 5-5 5" fill="none" stroke="#FF6B5A" stroke-width="5" stroke-linecap="round"/></svg>Chameleon</a>
+          <p style="margin-top:12px;max-width:30em">Custom PS5 controller housings, fitted by hand.</p>
+        </div>
+        <div><h4>Explore</h4><ul><li><a href="/#colours">Colours</a></li><li><a href="/#models">Find your model</a></li><li><a href="/#how">How it works</a></li></ul></div>
+        <div><h4>Help</h4><ul><li><a href="/repair">Repairs</a></li><li><a data-mail href="#">Email us</a></li></ul></div>
+      </div>
+      <div class="foot-base"><span>© <span data-year></span> Chameleon</span><span>Not affiliated with Sony Interactive Entertainment.</span></div>
+    </div>
+  </footer>
+
+  <script src="/assets/catalog.js"></script>
+  <script src="/assets/site.js"></script>
+  <script src="/assets/repair.js"></script>
+</body>
+</html>

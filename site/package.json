@@ -1,0 +1,11 @@
+{
+  "name": "chameleon-site",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Chameleon public website: overview and repair tickets",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "nodemailer": "^6.9.16"
+  }
+}
