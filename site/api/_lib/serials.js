@@ -1,5 +1,7 @@
 // The list of real Chameleon order serials, sent by OrderTrack on the owner's Mac.
-// Kept in Vercel Blob (connect a Blob store to the project), under a path derived
+// Kept in Vercel Blob (connect a Blob store to the project; newer stores sign in
+// with BLOB_STORE_ID and Vercel's own OIDC token, older ones with
+// BLOB_READ_WRITE_TOKEN), stored privately where the store allows, under a path derived
 // from SYNC_TOKEN so it cannot be guessed. Only serial, model, colour, status and
 // order date are kept: nothing about the customer.
 import crypto from 'node:crypto';
@@ -11,7 +13,7 @@ const STATUS = {
 };
 
 export function syncReady() {
-  return !!process.env.SYNC_TOKEN && (!!process.env.BLOB_READ_WRITE_TOKEN || !!process.env.SERIALS_FILE);
+  return !!process.env.SYNC_TOKEN && (!!process.env.BLOB_STORE_ID || !!process.env.BLOB_READ_WRITE_TOKEN || !!process.env.SERIALS_FILE);
 }
 
 function blobPath() {
@@ -46,7 +48,14 @@ export async function save(serials) {
   const body = JSON.stringify({ updated: new Date().toISOString(), serials });
   if (process.env.SERIALS_FILE) { fs.writeFileSync(process.env.SERIALS_FILE, body); cache = null; return; }
   const { put } = await import('@vercel/blob');
-  await put(blobPath(), body, { access: 'public', addRandomSuffix: false, contentType: 'application/json', cacheControlMaxAge: 60 });
+  const opts = { addRandomSuffix: false, allowOverwrite: true, contentType: 'application/json', cacheControlMaxAge: 60 };
+  try {
+    // Private where the store allows it; a public store only takes public files.
+    await put(blobPath(), body, { ...opts, access: 'private' });
+  } catch (err) {
+    console.warn('serials: private save failed, trying public', err && err.message);
+    await put(blobPath(), body, { ...opts, access: 'public' });
+  }
   cache = null;
 }
 
@@ -57,12 +66,15 @@ export async function load() {
   if (process.env.SERIALS_FILE) {
     try { data = JSON.parse(fs.readFileSync(process.env.SERIALS_FILE, 'utf8')); } catch { data = null; }
   } else {
-    const { head } = await import('@vercel/blob');
-    try {
-      const meta = await head(blobPath());
-      const res = await fetch(`${meta.url}?v=${Date.now()}`, { cache: 'no-store' });
-      if (res.ok) data = await res.json();
-    } catch { data = null; }
+    const { get } = await import('@vercel/blob');
+    for (const access of ['private', 'public']) {
+      try {
+        const r = await get(blobPath(), { access, useCache: false });
+        if (r && r.statusCode === 200 && r.stream) { data = JSON.parse(await new Response(r.stream).text()); break; }
+      } catch (err) {
+        if (access === 'public') console.warn('serials: could not read the list', err && err.message);
+      }
+    }
   }
   cache = { at: Date.now(), data };
   return data;
