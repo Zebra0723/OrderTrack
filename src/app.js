@@ -1383,9 +1383,12 @@
         s.website.enabled = webToggle.checked;
         if (s.website.enabled && !s.website.key) s.website.key = newToken();
         await persist(s.website.enabled ? 'Website sync on' : 'Website sync off');
-        reRender();
+        const y = content.scrollTop; await renderSettings(); content.scrollTop = y;
       });
       showWebStatus();
+      // The first send happens a few seconds after a change: show how it went.
+      setTimeout(showWebStatus, 6000);
+      setTimeout(showWebStatus, 25000);
     }
     const cometToggle = $('[data-comet="enabled"]', main);
     if (cometToggle) {
