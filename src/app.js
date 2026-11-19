@@ -222,13 +222,54 @@
       <div class="sb-foot">
         <button class="sb-item" data-nav="settings">${icon('gear')}Settings</button>
         <button class="sb-item" data-action="lock">${icon('lock')}Lock</button>
+        <div class="sb-update" id="updateBox" hidden></div>
         <div class="sb-version" id="appVersion"></div>
       </div>`;
     if (api.version) api.version().then((v) => { $('#appVersion').textContent = 'Version ' + v; });
+    showUpdate();
     $('.mobilebar .iconbtn').innerHTML = icon('menu');
     $('#find').addEventListener('submit', (e) => { e.preventDefault(); find($('#findInput').value); });
     $('#findInput').addEventListener('input', (e) => { const p = e.target.selectionStart; e.target.value = e.target.value.toUpperCase(); e.target.setSelectionRange(p, p); });
     updateCounts();
+  }
+
+  // ---------- Updates: a button in the sidebar when a newer version is out ----------
+  let update = null;
+  let updating = false;
+  function showUpdate() {
+    const box = $('#updateBox');
+    if (!box) return;
+    if (!update || !update.available) { box.hidden = true; return; }
+    box.hidden = false;
+    if (updating) return;
+    box.innerHTML = `<div><b>Update ready</b><span>Version ${esc(update.latest)}</span></div><button class="btn primary sm" data-action="installUpdate">Update now</button>`;
+  }
+  async function checkUpdate() {
+    if (!api.updateCheck) return;
+    try { update = await api.updateCheck(); } catch { return; }
+    showUpdate();
+  }
+  async function installUpdate() {
+    const box = $('#updateBox');
+    if (updating || !box) return;
+    updating = true;
+    box.innerHTML = '<div><b>Updating...</b><span id="updatePct">Downloading</span></div><div class="sb-update-bar"><i id="updateBar"></i></div>';
+    if (api.onUpdateProgress) api.onUpdateProgress((pct) => {
+      const t = $('#updatePct'), b = $('#updateBar');
+      if (t) t.textContent = pct >= 100 ? 'Installing and reopening' : `Downloading ${pct}%`;
+      if (b) b.style.width = pct + '%';
+    });
+    const r = await api.updateInstall();
+    if (!r.ok) {
+      updating = false;
+      showUpdate();
+      return toast('Update failed: ' + r.error, true);
+    }
+    const t = $('#updatePct'); if (t) t.textContent = 'Installing and reopening';
+  }
+  if (api.updateCheck) {
+    setTimeout(checkUpdate, 3000);
+    setInterval(checkUpdate, 2 * 3600_000);
   }
 
   function updateCounts() {
@@ -2730,6 +2771,7 @@
       case 'editPayment': return order && editPayment(order);
       case 'editOrder': return order && go('edit', { id: order.id, biz: order.business });
       case 'deleteCustomer': return deleteCustomer(el.dataset.key);
+      case 'installUpdate': return installUpdate();
       case 'cometInvite': return openCometInvite({ contact: el.dataset.contact, name: el.dataset.name, business: el.dataset.biz });
       case 'outreachRemove': case 'outreachRetry': case 'outreachOpen': return outreachAction(action, el);
       case 'markReceived': return order && markReceived(order);

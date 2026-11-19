@@ -17,6 +17,7 @@
       "preload.js",
       "comet-api.js",
       "website-sync.js",
+      "updater.js",
       "src/**/*",
       "package.json"
     ],

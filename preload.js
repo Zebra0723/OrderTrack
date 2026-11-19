@@ -19,5 +19,8 @@ contextBridge.exposeInMainWorld('api', {
   apiRespond: (reqId, result) => ipcRenderer.invoke('api:respond', { reqId, result }),
   cometStatus: () => ipcRenderer.invoke('comet:status'),
   websiteStatus: () => ipcRenderer.invoke('website:status'),
-  websiteSync: (data) => ipcRenderer.invoke('website:sync', data)
+  websiteSync: (data) => ipcRenderer.invoke('website:sync', data),
+  updateCheck: () => ipcRenderer.invoke('update:check'),
+  updateInstall: () => ipcRenderer.invoke('update:install'),
+  onUpdateProgress: (fn) => ipcRenderer.on('update:progress', (_e, pct) => fn(pct))
 });

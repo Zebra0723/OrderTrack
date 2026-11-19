@@ -4,6 +4,8 @@ const fs = require('fs');
 const nodemailer = require('nodemailer');
 const { CometApi } = require('./comet-api');
 const { WebsiteSync } = require('./website-sync');
+const { Updater } = require('./updater');
+const updater = new Updater();
 const websiteSync = new WebsiteSync();
 
 let mainWin = null;
@@ -70,6 +72,10 @@ ipcMain.handle('data:save', (_e, data) => {
   websiteSync.update(data);
   return true;
 });
+
+// ---------- Updates from inside the app ----------
+ipcMain.handle('update:check', () => updater.check());
+ipcMain.handle('update:install', (e) => updater.install((pct) => { if (!e.sender.isDestroyed()) e.sender.send('update:progress', pct); }));
 
 // ---------- Chameleon website (serials for the repair form) ----------
 ipcMain.handle('website:status', () => websiteSync.state);
